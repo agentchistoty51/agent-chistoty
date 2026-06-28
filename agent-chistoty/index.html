@@ -1,778 +1,1470 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="yandex-verification" content="6a38c4a8d4997110" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Агент Чистоты | AI-клининг Мурманск</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Inter',system-ui,-apple-system,sans-serif; background:#f8fafc; }
-        .glass { background:rgba(255,255,255,0.8); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.6); box-shadow:0 8px 32px rgba(0,0,0,0.04); }
-        .hover-lift { transition:all 0.3s ease; }
-        .hover-lift:hover { transform:translateY(-5px); box-shadow:0 20px 40px rgba(20,184,166,0.15); }
-        .page { display:none; animation:fadeIn 0.3s ease; }
-        .page.active { display:block; }
-        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-        .scan-line { position:absolute; top:0; left:0; width:100%; height:4px; background:linear-gradient(90deg,transparent,#14b8a6,transparent); animation:scan 2s infinite; }
-        @keyframes scan { 0% { top:-4px; } 100% { top:100%; } }
-        .toast { position:fixed; bottom:20px; right:20px; background:#1e293b; color:white; padding:12px 24px; border-radius:12px; z-index:999; animation:slideUp 0.3s ease; }
-        @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        .filter-btn.active { background:#14b8a6!important; color:white!important; }
-        .nav-btn.active { background:#ccfbf1; color:#0f766e; }
-        .calendar-day { width: 2.5rem; height: 2.5rem; display: flex; align-items: center; justify-content: center; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem; }
-        .calendar-day:hover { background: #ccfbf1; }
-        .calendar-day.selected { background: #14b8a6; color: white; }
-        .calendar-day.booked { background: #fee2e2; color: #b91c1c; cursor: not-allowed; text-decoration: line-through; }
-        .calendar-day.partial { background: #fef3c7; color: #92400e; }
-        .calendar-day.past { background: #f3f4f6; color: #d1d5db; cursor: default; }
-        .calendar-day.empty { cursor: default; }
-        .time-slot { padding: 0.5rem; border-radius: 0.5rem; cursor: pointer; text-align: center; font-size: 0.875rem; }
-        .time-slot:hover { background: #ccfbf1; }
-        .time-slot.selected { background: #14b8a6; color: white; }
-        .time-slot.booked { background: #fee2e2; color: #b91c1c; cursor: not-allowed; text-decoration: line-through; }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Агент Чистоты | AI-клининг Мурманск</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #f0f2f5;
+    color: #222;
+    line-height: 1.6;
+  }
+  /* Эффект стекла */
+  .glass {
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.3);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  }
+  /* Наведение */
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+  }
+  /* Страницы */
+  .page {
+    display: none;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+  }
+  .page.active {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* Скролл */
+  #adminBookedSlotsList {
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  /* Тосты */
+  .toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: rgba(30, 41, 59, 0.9);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    z-index: 999;
+    opacity: 0;
+    animation: slideUp 0.3s forwards;
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  /* Плавность эффектов */
+  .btn {
+    transition: all 0.3s ease;
+  }
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(20,184,166,0.2);
+  }
+  /* Карточки */
+  .card {
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.3);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+  }
+</style>
 </head>
-<body class="text-gray-800">
+<body class="antialiased">
 
-    <!-- ХЕДЕР -->
-    <header class="glass sticky top-0 z-50 border-b border-gray-100">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-3 cursor-pointer" onclick="navigate('home')">
-                <div class="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <span class="text-white font-bold text-xl">А</span>
-                </div>
-                <div>
-                    <h1 class="text-lg font-bold text-teal-700">Агент Чистоты</h1>
-                    <p class="text-xs text-gray-400">Мурманск и область</p>
-                </div>
-            </div>
-            <nav class="hidden md:flex items-center gap-2">
-                <button onclick="navigate('home')" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium transition">🏠 Главная</button>
-                <button onclick="navigate('services')" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium transition">📋 Услуги</button>
-                <button onclick="navigate('ai')" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium transition">🤖 AI</button>
-                <button onclick="navigate('cart')" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium transition relative">
-                    🛒 Корзина <span id="cartBadge" class="hidden absolute -top-1 -right-2 bg-teal-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">0</span>
-                </button>
-                <button onclick="navigate('profile')" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium transition">👤 Кабинет</button>
-                <button onclick="openAdminPanel()" class="nav-btn px-4 py-2 rounded-xl text-sm font-medium transition" title="Управление занятостью">⚙️</button>
-            </nav>
-            <div class="flex items-center gap-3">
-                <button onclick="window.location.href='tel:+79512961111'" class="hidden sm:flex items-center gap-2 bg-teal-50 text-teal-700 px-4 py-2.5 rounded-xl font-semibold text-sm pulse-ring">
-                    📞 8 (951) 296-11-11
-                </button>
-                <button class="md:hidden p-2" onclick="toggleMobileMenu()">☰</button>
-            </div>
-        </div>
-        <div id="mobileMenu" class="hidden md:hidden border-t border-gray-100 p-4 space-y-2">
-            <button onclick="navigate('home')" class="block w-full text-left py-2">🏠 Главная</button>
-            <button onclick="navigate('services')" class="block w-full text-left py-2">📋 Услуги</button>
-            <button onclick="navigate('ai')" class="block w-full text-left py-2">🤖 AI</button>
-            <button onclick="navigate('cart')" class="block w-full text-left py-2">🛒 Корзина</button>
-            <button onclick="navigate('profile')" class="block w-full text-left py-2">👤 Кабинет</button>
-            <button onclick="openAdminPanel()" class="block w-full text-left py-2">⚙️ Занятость</button>
-            <button onclick="window.location.href='tel:+79512961111'" class="block w-full text-left py-2 bg-teal-50 rounded-xl px-3">📞 Позвонить</button>
-        </div>
-    </header>
-
-    <!-- ГЛАВНАЯ -->
-    <div id="page-home" class="page active">
-        <section class="relative bg-gradient-to-br from-teal-800 to-teal-600 text-white py-20 overflow-hidden">
-            <div class="absolute inset-0 opacity-10">
-                <div class="absolute w-40 h-40 bg-white rounded-full top-10 left-10"></div>
-                <div class="absolute w-60 h-60 bg-white rounded-full bottom-10 right-20"></div>
-            </div>
-            <div class="max-w-5xl mx-auto px-4 relative z-10 text-center">
-                <h1 class="text-5xl md:text-7xl font-black mb-6">Идеальная чистота<br>с 🤖 AI</h1>
-                <p class="text-xl text-teal-100 mb-8">Профессиональный клининг в Мурманске. Нейросеть распознает мебель, окна, сантехнику и подберёт услуги.</p>
-                <div class="flex flex-wrap justify-center gap-4">
-                    <button onclick="navigate('ai')" class="bg-white text-teal-700 px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-xl transition">🤖 Попробовать AI</button>
-                    <button onclick="window.location.href='tel:+79512961111'" class="bg-white/20 backdrop-blur px-8 py-4 rounded-2xl font-bold text-lg border border-white/30 hover:bg-white/30 transition">📞 Позвонить</button>
-                </div>
-            </div>
-        </section>
-        <section class="max-w-5xl mx-auto px-4 py-16">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="glass rounded-2xl p-6 hover-lift"><div class="text-3xl mb-3">🧠</div><h3 class="font-bold text-lg">AI-диагностика</h3><p class="text-gray-500 text-sm">Распознаём мебель, окна, сантехнику</p></div>
-                <div class="glass rounded-2xl p-6 hover-lift"><div class="text-3xl mb-3">🛡️</div><h3 class="font-bold text-lg">Гарантия</h3><p class="text-gray-500 text-sm">100% качество или переделаем</p></div>
-                <div class="glass rounded-2xl p-6 hover-lift"><div class="text-3xl mb-3">💰</div><h3 class="font-bold text-lg">Честные цены</h3><p class="text-gray-500 text-sm">Без скрытых платежей</p></div>
-            </div>
-        </section>
+<!-- Хедер -->
+<header class="glass sticky top-0 z-50 border-b border-gray-200 p-4 flex items-center justify-between backdrop-blur-md shadow-md">
+  <div class="flex items-center gap-3 cursor-pointer" onclick="navigate('home')">
+    <div class="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
+      <span class="text-white font-bold text-xl">А</span>
     </div>
-
-    <!-- УСЛУГИ -->
-    <div id="page-services" class="page">
-        <div class="max-w-6xl mx-auto px-4 py-10">
-            <h2 class="text-4xl font-black text-center mb-10">Все услуги</h2>
-            <div class="flex flex-wrap justify-center gap-3 mb-8" id="filterButtons"></div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="allServicesGrid"></div>
-        </div>
+    <div>
+      <h1 class="text-lg font-bold text-teal-700">Агент Чистоты</h1>
+      <p class="text-xs text-gray-500">Мурманск и область</p>
     </div>
+  </div>
+  <nav class="hidden md:flex items-center gap-2">
+    <button onclick="navigate('home')" class="px-4 py-2 rounded-xl text-sm font-medium">🏠 Главная</button>
+    <button onclick="navigate('services')" class="px-4 py-2 rounded-xl text-sm font-medium">📋 Услуги</button>
+    <button onclick="navigate('ai')" class="px-4 py-2 rounded-xl text-sm font-medium">🤖 AI</button>
+    <button onclick="navigate('cart')" class="px-4 py-2 rounded-xl text-sm font-medium relative">
+      🛒 Корзина
+      <span id="cartBadge" class="hidden absolute -top-1 -right-2 bg-teal-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold"></span>
+    </button>
+    <button onclick="navigate('profile')" class="px-4 py-2 rounded-xl text-sm font-medium">👤 Кабинет</button>
+    <button onclick="openAdminPanel()" class="px-4 py-2 rounded-xl text-sm font-medium" title="Управление занятостью">⚙️</button>
+  </nav>
+  <div class="flex items-center gap-3">
+    <button onclick="window.location.href='tel:+79512961111'" class="hidden sm:flex items-center gap-2 bg-teal-50 text-teal-700 px-4 py-2.5 rounded-xl font-semibold text-sm">📞 8 (951) 296-11-11</button>
+    <button class="md:hidden p-2" onclick="toggleMobileMenu()">☰</button>
+  </div>
+</header>
 
-    <!-- AI -->
-    <div id="page-ai" class="page">
-        <div class="max-w-2xl mx-auto px-4 py-10">
-            <h2 class="text-4xl font-black text-center mb-4">🤖 AI-диагностика</h2>
-            <p class="text-center text-gray-500 mb-4">Загрузите фото – нейросеть определит, какие предметы в кадре, и подберёт услуги</p>
-            <div id="modelStatus" class="text-center text-sm text-gray-500 mb-4">Загрузка модели распознавания...</div>
-            <div class="glass rounded-3xl p-8 text-center">
-                <div id="aiUpload" class="border-2 border-dashed border-teal-300 rounded-2xl p-10 cursor-pointer hover:bg-teal-50 relative overflow-hidden">
-                    <div class="scan-line"></div>
-                    <div class="text-5xl mb-4">📸</div>
-                    <h3 class="text-xl font-bold mb-2">Нажмите или перетащите фото</h3>
-                    <p class="text-gray-400 mb-4">JPG, PNG до 10 МБ</p>
-                    <input type="file" id="aiImageInput" accept="image/*" class="hidden" onchange="handleAIImage(this)">
-                    <button onclick="document.getElementById('aiImageInput').click()" class="bg-teal-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-teal-600">📁 Выбрать файл</button>
-                </div>
-                <div id="aiPreview" class="hidden mt-6"><img id="previewImg" class="w-full h-48 object-cover rounded-xl mb-4"><canvas id="analysisCanvas" class="hidden"></canvas><button onclick="resetAI()" class="text-red-500 text-sm">✕ Удалить фото</button></div>
-                <div id="aiProgress" class="hidden mt-6"><div class="flex items-center gap-2 text-sm text-gray-600 mb-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-500"></div><span id="aiStatusText">Анализируем изображение…</span></div><div class="w-full bg-gray-200 rounded-full h-2"><div id="aiProgressBar" class="bg-teal-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div></div></div>
-                <div id="aiResult" class="hidden mt-6 text-left"></div>
-            </div>
-        </div>
+<!-- Мобильное меню -->
+<div id="mobileMenu" class="hidden md:hidden border border-gray-300 p-4 space-y-2 backdrop-blur-md shadow-lg rounded-xl">
+  <button onclick="navigate('home')" class="block w-full text-left py-2 btn">🏠 Главная</button>
+  <button onclick="navigate('services')" class="block w-full text-left py-2 btn">📋 Услуги</button>
+  <button onclick="navigate('ai')" class="block w-full text-left py-2 btn">🤖 AI</button>
+  <button onclick="navigate('cart')" class="block w-full text-left py-2 btn">🛒 Корзина</button>
+  <button onclick="navigate('profile')" class="block w-full text-left py-2 btn">👤 Кабинет</button>
+  <button onclick="openAdminPanel()" class="block w-full text-left py-2 btn">⚙️ Занятость</button>
+  <button onclick="window.location.href='tel:+79512961111'" class="block w-full text-left py-2 bg-teal-50 rounded-xl px-3">📞 Позвонить</button>
+</div>
+
+<!-- Основной контент -->
+<div id="page-home" class="page active p-8">
+  <section class="py-20 bg-gradient-to-br from-gray-100 via-white to-gray-100 rounded-xl shadow-lg backdrop-blur-md text-center">
+    <div class="max-w-5xl mx-auto px-4">
+      <h1 class="text-5xl md:text-7xl font-extrabold mb-6 text-gray-900">Идеальная чистота с 🤖 AI</h1>
+      <p class="text-xl text-gray-700 mb-8">Профессиональный клининг в Мурманске. Нейросеть распознает мебель, окна, сантехнику и подберёт услуги.</p>
+      <div class="flex flex-wrap justify-center gap-4">
+        <button onclick="navigate('ai')" class="px-8 py-4 bg-white/70 rounded-2xl font-bold text-lg hover:scale-105 transition shadow-lg">🤖 Попробовать AI</button>
+        <button onclick="window.location.href='tel:+79512961111'" class="px-8 py-4 bg-white/70 rounded-2xl font-bold text-lg hover:scale-105 transition shadow-lg">📞 Позвонить</button>
+      </div>
     </div>
+  </section>
+</div>
 
-    <!-- КОРЗИНА (с навигацией по месяцам/годам) -->
-    <div id="page-cart" class="page">
-        <div class="max-w-2xl mx-auto px-4 py-10">
-            <h2 class="text-4xl font-black text-center mb-10">🛒 Корзина</h2>
-            <div id="cartItems" class="space-y-3"></div>
-            <div id="cartEmptyBlock" class="text-center py-20 text-gray-400">Корзина пуста</div>
-            <div id="cartFormBlock" class="hidden mt-8 glass rounded-2xl p-6 space-y-4">
-                <h3 class="font-bold text-xl">Оформить заявку</h3>
-                <input type="text" id="orderName" placeholder="Ваше имя *" class="w-full p-3 border rounded-xl" required>
-                <input type="tel" id="orderPhone" placeholder="Телефон *" class="w-full p-3 border rounded-xl" required>
-                <input type="text" id="orderAddress" placeholder="Адрес" class="w-full p-3 border rounded-xl">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm text-gray-600 mb-1">📅 Выберите дату</label>
-                        <div class="flex items-center gap-2 mb-2">
-                            <button onclick="changeClientMonth(-1)" class="p-1 bg-gray-100 rounded">◀</button>
-                            <span id="clientMonthLabel" class="font-semibold flex-1 text-center text-sm"></span>
-                            <button onclick="changeClientMonth(1)" class="p-1 bg-gray-100 rounded">▶</button>
-                            <select id="clientYearSelect" onchange="changeClientYear()" class="p-1 border rounded text-xs"></select>
-                        </div>
-                        <div id="calendarWidget" class="p-3 bg-white rounded-xl border"></div>
-                    </div>
-                    <div>
-                        <label class="block text-sm text-gray-600 mb-1">🕒 Удобное время</label>
-                        <div id="timeSlotsWidget" class="p-3 bg-white rounded-xl border grid grid-cols-3 gap-2"></div>
-                    </div>
-                </div>
-                <textarea id="orderComment" placeholder="Комментарий" class="w-full p-3 border rounded-xl" rows="3"></textarea>
-                <div>
-                    <label class="block text-sm font-medium mb-1">📎 Прикрепить фото (можно несколько)</label>
-                    <input type="file" id="orderPhotos" accept="image/*" multiple class="w-full p-2 border rounded-xl text-sm">
-                </div>
-                <div class="flex justify-between font-bold text-lg"><span>Итого:</span> <span id="cartTotalPrice">0 ₽</span></div>
-                <p class="text-xs text-gray-500">Заявки отправляются на agentchistoty51@mail.ru</p>
-                <button onclick="submitOrder()" class="w-full bg-teal-500 text-white py-3 rounded-xl font-bold hover:bg-teal-600">Отправить заявку</button>
-                <button onclick="clearCart()" class="w-full text-gray-500 text-sm">Очистить корзину</button>
-            </div>
+<!-- Страница услуг -->
+<div id="page-services" class="page p-8">
+  <div class="max-w-6xl mx-auto">
+    <h2 class="text-4xl font-extrabold mb-8 text-center">Все услуги</h2>
+    <div class="flex justify-center gap-3 mb-8" id="filterButtons"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="allServicesGrid"></div>
+  </div>
+</div>
+
+<!-- AI -->
+<div id="page-ai" class="page p-8">
+  <div class="max-w-2xl mx-auto">
+    <h2 class="text-4xl font-extrabold mb-4 text-center">🤖 AI-диагностика</h2>
+    <p class="text-center text-gray-600 mb-4">Загрузите фото – нейросеть определит, какие предметы в кадре, и подберёт услуги</p>
+    <div id="modelStatus" class="text-center text-sm text-gray-500 mb-4">Загрузка модели распознавания...</div>
+    <div class="glass rounded-3xl p-8 mb-4 relative overflow-hidden">
+      <div class="scan-line"></div>
+      <div id="aiUpload" class="border-2 border-dashed border-teal-300 rounded-2xl p-10 cursor-pointer hover:bg-teal-50 relative overflow-hidden">
+        <div class="text-5xl mb-4">📸</div>
+        <h3 class="text-xl font-bold mb-2">Нажмите или перетащите фото</h3>
+        <p class="text-gray-400 mb-4">JPG, PNG до 10 МБ</p>
+        <input type="file" id="aiImageInput" accept="image/*" class="hidden" onchange="handleAIImage(this)">
+        <button onclick="document.getElementById('aiImageInput').click()" class="bg-teal-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-teal-600">📁 Выбрать файл</button>
+      </div>
+      <div id="aiPreview" class="hidden mt-6">
+        <img id="previewImg" class="w-full h-48 object-cover rounded-xl mb-4" />
+        <canvas id="analysisCanvas" class="hidden"></canvas>
+        <button onclick="resetAI()" class="text-red-500 text-sm">✕ Удалить фото</button>
+      </div>
+      <div id="aiProgress" class="hidden mt-6">
+        <div class="flex items-center gap-2 text-sm text-gray-600 mb-2">
+          <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-500"></div>
+          <span id="aiStatusText">Анализируем изображение…</span>
         </div>
-    </div>
-
-    <!-- ЛИЧНЫЙ КАБИНЕТ -->
-    <div id="page-profile" class="page">
-        <div class="max-w-md mx-auto px-4 py-10">
-            <h2 class="text-4xl font-black text-center mb-10">👤 Личный кабинет</h2>
-            <div id="profileNotLogged" class="glass rounded-2xl p-6 space-y-4">
-                <input type="text" id="loginName" placeholder="Ваше имя" class="w-full p-3 border rounded-xl">
-                <input type="tel" id="loginPhone" placeholder="Телефон" class="w-full p-3 border rounded-xl">
-                <button onclick="login()" class="w-full bg-teal-500 text-white py-3 rounded-xl font-bold">Войти</button>
-            </div>
-            <div id="profileLogged" class="hidden glass rounded-2xl p-6 space-y-4">
-                <p>👋 <span id="profileName" class="font-bold"></span></p>
-                <p>📞 <span id="profilePhone"></span></p>
-                <button onclick="logout()" class="text-red-500 text-sm">Выйти</button>
-                <h3 class="font-bold mt-6">📋 История заявок</h3>
-                <div id="orderHistory" class="space-y-2"></div>
-            </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div id="aiProgressBar" class="bg-teal-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
+      </div>
+      <div id="aiResult" class="hidden mt-6 text-left"></div>
     </div>
+  </div>
+</div>
 
-    <!-- АДМИНИСТРАТИВНАЯ ПАНЕЛЬ -->
-    <div id="adminModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div class="glass rounded-2xl p-6 w-full max-w-lg mx-4 space-y-4 max-h-[95vh] overflow-y-auto">
-            <h2 class="text-xl font-bold">⚙️ Управление занятостью</h2>
-            <div class="flex items-center gap-2">
-                <button onclick="changeAdminMonth(-1)" class="p-1 bg-gray-100 rounded">◀</button>
-                <span id="adminMonthLabel" class="font-semibold flex-1 text-center"></span>
-                <button onclick="changeAdminMonth(1)" class="p-1 bg-gray-100 rounded">▶</button>
-                <select id="adminYearSelect" onchange="changeAdminYear()" class="p-1 border rounded text-sm"></select>
-            </div>
-            <div id="adminCalendar" class="p-3 bg-white rounded-xl border"></div>
-            <div id="adminTimeSlots" class="hidden p-3 bg-white rounded-xl border">
-                <p class="text-sm font-medium mb-2">🕒 Укажите занятое время для <span id="adminSelectedDateLabel"></span></p>
-                <div class="grid grid-cols-4 gap-2" id="adminTimeSlotsGrid"></div>
-            </div>
-            <div>
-                <p class="text-sm font-medium mb-2">📋 Занятые слоты (<span id="adminCurrentMonthLabel"></span>)</p>
-                <div id="adminBookedSlotsList" class="space-y-1 max-h-40 overflow-y-auto text-sm"></div>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="closeAdminPanel()" class="flex-1 py-2 bg-gray-200 rounded-xl">Закрыть</button>
-                <button onclick="clearAllBooked()" class="flex-1 py-2 bg-red-100 text-red-700 rounded-xl">Сбросить всё</button>
-            </div>
+<!-- Корзина -->
+<div id="page-cart" class="page p-8">
+  <div class="max-w-2xl mx-auto">
+    <h2 class="text-4xl font-extrabold mb-8 text-center">🛒 Корзина</h2>
+    <div id="cartItems" class="space-y-3"></div>
+    <div id="cartEmptyBlock" class="text-center py-20 text-gray-400">Корзина пуста</div>
+    <div id="cartFormBlock" class="hidden mt-8 glass rounded-2xl p-6 space-y-4">
+      <h3 class="font-bold text-xl mb-4">Оформить заявку</h3>
+      <input type="text" id="orderName" placeholder="Ваше имя *" class="w-full p-3 border rounded-xl mb-2" required>
+      <input type="tel" id="orderPhone" placeholder="Телефон *" class="w-full p-3 border rounded-xl mb-2" required>
+      <input type="text" id="orderAddress" placeholder="Адрес" class="w-full p-3 border rounded-xl mb-2">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">📅 Выберите дату</label>
+          <div class="flex items-center gap-2 mb-2">
+            <button onclick="changeClientMonth(-1)" class="p-1 bg-gray-100 rounded">◀</button>
+            <span id="clientMonthLabel" class="font-semibold flex-1 text-center text-sm"></span>
+            <button onclick="changeClientMonth(1)" class="p-1 bg-gray-100 rounded">▶</button>
+            <select id="clientYearSelect" onchange="changeClientYear()" class="p-1 border rounded text-xs"></select>
+          </div>
+          <div id="calendarWidget" class="p-3 bg-white rounded-xl border"></div>
         </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">🕒 Удобное время</label>
+          <div id="timeSlotsWidget" class="p-3 bg-white rounded-xl border grid grid-cols-3 gap-2"></div>
+        </div>
+      </div>
+      <textarea id="orderComment" placeholder="Комментарий" class="w-full p-3 border rounded-xl mb-4" rows="3"></textarea>
+      <div>
+        <label class="block text-sm font-medium mb-1">📎 Прикрепить фото (можно несколько)</label>
+        <input type="file" id="orderPhotos" accept="image/*" multiple class="w-full p-2 border rounded-xl text-sm mb-4">
+      </div>
+      <div class="flex justify-between font-bold text-lg mb-4"><span>Итого:</span> <span id="cartTotalPrice">0 ₽</span></div>
+      <p class="text-xs text-gray-500 mb-4">Заявки отправляются на agentchistoty51@mail.ru</p>
+      <button onclick="submitOrder()" class="w-full bg-teal-500 text-white py-3 rounded-xl font-bold hover:bg-teal-600 transition">Отправить заявку</button>
+      <button onclick="clearCart()" class="w-full text-gray-500 text-sm mt-2">Очистить корзину</button>
     </div>
+  </div>
+</div>
 
-    <div id="toast" class="toast hidden"></div>
+<!-- Личный кабинет -->
+<div id="page-profile" class="page p-8">
+  <div class="max-w-md mx-auto">
+    <h2 class="text-4xl font-extrabold mb-8 text-center">👤 Личный кабинет</h2>
+    <div id="profileNotLogged" class="glass rounded-2xl p-6 space-y-4">
+      <input type="text" id="loginName" placeholder="Ваше имя" class="w-full p-3 border rounded-xl mb-2">
+      <input type="tel" id="loginPhone" placeholder="Телефон" class="w-full p-3 border rounded-xl mb-2">
+      <button onclick="login()" class="w-full bg-teal-500 text-white py-3 rounded-xl font-bold">Войти</button>
+    </div>
+    <div id="profileLogged" class="hidden glass rounded-2xl p-6 space-y-4">
+      <p>👋 <span id="profileName" class="font-bold"></span></p>
+      <p>📞 <span id="profilePhone"></span></p>
+      <button onclick="logout()" class="text-red-500 text-sm">Выйти</button>
+      <h3 class="font-bold mt-6 mb-2">📋 История заявок</h3>
+      <div id="orderHistory" class="space-y-2"></div>
+    </div>
+  </div>
+</div>
 
-    <script>
-        // ⚙️ Настройки
-        const FORMSPREE_FORM_ID = "mbdbzdqo"; // замените на ваш ID после активации
-        const ADMIN_PASSWORD = "admin123";
+<!-- Админка -->
+<div id="adminModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  <div class="glass rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[95vh] overflow-y-auto">
+    <h2 class="text-xl font-bold mb-4">⚙️ Управление занятостью</h2>
+    <div class="flex items-center gap-2 mb-4">
+      <button onclick="changeAdminMonth(-1)" class="p-1 bg-gray-100 rounded">◀</button>
+      <span id="adminMonthLabel" class="font-semibold flex-1 text-center"></span>
+      <button onclick="changeAdminMonth(1)" class="p-1 bg-gray-100 rounded">▶</button>
+      <select id="adminYearSelect" onchange="changeAdminYear()" class="p-1 border rounded text-sm"></select>
+    </div>
+    <div id="adminCalendar" class="p-3 bg-white rounded-xl border mb-4"></div>
+    <div id="adminTimeSlots" class="hidden p-3 bg-white rounded-xl border mb-4">
+      <p class="text-sm font-medium mb-2">🕒 Укажите занятое время для <span id="adminSelectedDateLabel"></span></p>
+      <div class="grid grid-cols-4 gap-2" id="adminTimeSlotsGrid"></div>
+    </div>
+    <div>
+      <p class="text-sm font-medium mb-2">📋 Занятые слоты (<span id="adminCurrentMonthLabel"></span>)</p>
+      <div id="adminBookedSlotsList" class="space-y-1 max-h-40 overflow-y-auto text-sm"></div>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button onclick="closeAdminPanel()" class="flex-1 py-2 bg-gray-200 rounded-xl">Закрыть</button>
+      <button onclick="clearAllBooked()" class="flex-1 py-2 bg-red-100 text-red-700 rounded-xl">Сбросить всё</button>
+    </div>
+  </div>
+</div>
 
-        let bookedSlots = JSON.parse(localStorage.getItem('bookedSlots') || '[]');
-        let selectedDate = null;
-        let selectedTime = null;
-        let clientCurrentMonth = new Date().getMonth();
-        let clientCurrentYear = new Date().getFullYear();
-        let adminCurrentYear = new Date().getFullYear();
-        let adminCurrentMonth = new Date().getMonth();
-        let adminSelectedDate = null;
+<div id="toast" class="toast hidden"></div>
 
-        // ==================== ПРАЙС-ЛИСТ ====================
-        const services = [
-            { id: 'gen_apt', name: 'Генеральная уборка квартиры/дома', price: 15000, icon: '🏠', category: 'Уборка', desc: 'Полная уборка помещения', aiObjects: ['room'] },
-            { id: 'repair_wash_floor', name: 'Очистка напольного покрытия после ремонта', price: 400, unit: 'м²', icon: '🧹', category: 'После ремонта', desc: 'Удаление строительной пыли', aiObjects: ['construction'] },
-            { id: 'window_2', name: 'Мойка двухстворчатого окна', price: 1500, icon: '🪟', category: 'Окна', desc: '', aiObjects: ['window'] },
-            { id: 'window_3', name: 'Мойка трёхстворчатого окна', price: 2000, icon: '🪟', category: 'Окна', aiObjects: ['window'] },
-            { id: 'window_nonstand', name: 'Мойка нестандартного окна', price: 2000, icon: '🪟', category: 'Окна', desc: 'Арочные, сталинские окна', aiObjects: ['window'] },
-            { id: 'balcony_door', name: 'Мойка балконной двери', price: 1000, icon: '🚪', category: 'Окна', aiObjects: ['door'] },
-            { id: 'balcony_1', name: 'Мойка балконного блока (1 створка)', price: 1000, icon: '🏢', category: 'Окна', aiObjects: ['balcony'] },
-            { id: 'bathroom', name: 'Генеральная уборка ванной комнаты', price: 4000, icon: '🛁', category: 'Санзона', aiObjects: ['toilet', 'sink'] },
-            { id: 'toilet', name: 'Уборка туалета (санузла)', price: 2500, icon: '🚽', category: 'Санзона', aiObjects: ['toilet'] },
-            { id: 'shower_cabin', name: 'Чистка душевой кабины', price: 2000, icon: '🚿', category: 'Санзона', aiObjects: ['shower'] },
-            { id: 'wash_machine', name: 'Чистка стиральной машины', price: 1000, icon: '🌀', category: 'Техника', aiObjects: ['washing machine'] },
-            { id: 'carpet_clean', name: 'Химчистка ковра', price: 500, unit: 'м²', icon: '🧼', category: 'Химчистка и доставка', desc: 'Минимальная стоимость 1000 руб.', aiObjects: ['carpet', 'rug'] },
-            { id: 'sofa', name: 'Химчистка дивана', price: 4000, icon: '🛋️', category: 'Мебель', aiObjects: ['couch', 'sofa'] },
-            { id: 'chair', name: 'Химчистка стула со спинкой', price: 1000, icon: '🪑', category: 'Мебель', aiObjects: ['chair'] },
-            { id: 'armchair', name: 'Химчистка кресла', price: 1500, icon: '🛋️', category: 'Мебель', aiObjects: ['chair'] },
-            { id: 'mattress_double', name: 'Химчистка двуспального матраса', price: 4000, icon: '🛏️', category: 'Мебель', aiObjects: ['bed'] },
-            { id: 'mattress_single', name: 'Химчистка полутороспального матраса', price: 3000, icon: '🛏️', category: 'Мебель', aiObjects: ['bed'] },
-            { id: 'curtains', name: 'Химчистка штор (тюля)', price: 400, unit: 'м²', icon: '🧴', category: 'Шторы и тюль', desc: 'Включает снятие, чистку, глажку, вешание', aiObjects: ['curtain'] },
-            { id: 'kitchen', name: 'Генеральная уборка кухни', price: 7000, icon: '🍳', category: 'Кухня', desc: 'Мытьё фасадов, столешницы, фартука, мойки', aiObjects: ['oven', 'microwave', 'refrigerator', 'sink'] },
-            { id: 'kitchen_inside', name: 'Мойка внутри кухонного гарнитура', price: 2000, icon: '🗄️', category: 'Кухня', aiObjects: ['cabinet'] },
-            { id: 'ceiling_wash', name: 'Мойка потолка', price: 400, unit: 'м²', icon: '⬆️', category: 'Кухня', aiObjects: [] },
-            { id: 'kitchen_floor', name: 'Очистка напольного покрытия (кухня)', price: 400, unit: 'м²', icon: '🧹', category: 'Кухня', aiObjects: [] },
-            { id: 'kettle', name: 'Мойка электрического чайника', price: 1000, icon: '🫖', category: 'Техника', aiObjects: ['kettle'] },
-            { id: 'microwave', name: 'Мойка микроволновой печи', price: 2000, icon: '📡', category: 'Техника', aiObjects: ['microwave'] },
-            { id: 'extractor', name: 'Мойка кухонной вытяжки', price: 2000, icon: '🌀', category: 'Техника', aiObjects: [] },
-            { id: 'dishwasher', name: 'Мойка посудомоечной машины', price: 2000, icon: '🍽️', category: 'Техника', aiObjects: ['dishwasher'] },
-            { id: 'fridge', name: 'Мойка холодильника', price: 2000, icon: '❄️', category: 'Техника', aiObjects: ['refrigerator'] },
-            { id: 'stove', name: 'Мойка варочной панели', price: 2000, icon: '🔥', category: 'Техника', aiObjects: ['oven'] },
-            { id: 'oven', name: 'Мойка духового шкафа', price: 2500, icon: '♨️', category: 'Техника', aiObjects: ['oven'] },
-            { id: 'tray', name: 'Мойка противней и решёток', price: 500, icon: '🧼', category: 'Техника', aiObjects: [] },
-            { id: 'delivery_pickup', name: 'Доставка (забор) по Мурманску', price: 200, icon: '📦', category: 'Химчистка и доставка', aiObjects: [] },
-            { id: 'delivery_return', name: 'Доставка (возврат) по Мурманску', price: 200, icon: '🚚', category: 'Химчистка и доставка', aiObjects: [] },
-            { id: 'inspection', name: 'Осмотр (бесплатный)', price: 0, icon: '🔍', category: 'Осмотр', desc: 'Выезд специалиста для оценки объекта', aiObjects: [] },
-        ];
+<script>
+  // ==================== Основные переменные ====================
+  const FORMSPREE_FORM_ID = "mbdbzdqo"; // вставьте свой ID
+  const ADMIN_PASSWORD = "admin123";
 
-        let cart = JSON.parse(localStorage.getItem('cleanCart') || '[]');
-        let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
-        let orders = JSON.parse(localStorage.getItem('orders') || '[]');
-        let currentFilter = 'all';
-        let cocoModel = null;
+  let bookedSlots = JSON.parse(localStorage.getItem('bookedSlots') || '[]');
+  let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+  let orders = JSON.parse(localStorage.getItem('orders') || '[]');
 
-        // ==================== НАВИГАЦИЯ ====================
-        function navigate(page) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById('page-' + page).classList.add('active');
-            window.scrollTo(0,0);
-            if (page === 'services') renderServices();
-            if (page === 'cart') { renderCart(); populateClientYearSelect(); renderCalendar(); }
-            if (page === 'profile') renderProfile();
-            if (page === 'ai' && !cocoModel) loadModel();
-            updateCartBadge();
-            document.getElementById('mobileMenu')?.classList.add('hidden');
-        }
-        function toggleMobileMenu() { document.getElementById('mobileMenu').classList.toggle('hidden'); }
+  let cocoModel = null;
 
-        // ==================== КОРЗИНА ====================
-        function updateCartBadge() {
-            const count = cart.reduce((s,i) => s + i.quantity, 0);
-            const badge = document.getElementById('cartBadge');
-            if (count > 0) { badge.textContent = count; badge.classList.remove('hidden'); }
-            else badge.classList.add('hidden');
-        }
-        function addToCart(serviceId) {
-            const existing = cart.find(i => i.id === serviceId);
-            if (existing) existing.quantity++;
-            else cart.push({ id: serviceId, quantity: 1 });
-            saveCart();
-            showToast('✅ Добавлено в корзину');
-        }
-        function removeFromCart(serviceId) { cart = cart.filter(i => i.id !== serviceId); saveCart(); renderCart(); }
-        function updateCartQuantity(serviceId, delta) {
-            const item = cart.find(i => i.id === serviceId);
-            if (!item) return;
-            item.quantity += delta;
-            if (item.quantity <= 0) removeFromCart(serviceId);
-            else { saveCart(); renderCart(); }
-        }
-        function clearCart() { cart = []; saveCart(); renderCart(); showToast('Корзина очищена'); }
-        function saveCart() { localStorage.setItem('cleanCart', JSON.stringify(cart)); updateCartBadge(); }
-        function getServiceById(id) { return services.find(s => s.id === id); }
-        function getCartTotal() { return cart.reduce((sum, i) => sum + (getServiceById(i.id)?.price || 0) * i.quantity, 0); }
-        function renderCart() {
-            const container = document.getElementById('cartItems');
-            const emptyBlock = document.getElementById('cartEmptyBlock');
-            const formBlock = document.getElementById('cartFormBlock');
-            const totalSpan = document.getElementById('cartTotalPrice');
-            if (cart.length === 0) {
-                container.innerHTML = ''; emptyBlock.classList.remove('hidden'); formBlock.classList.add('hidden');
-            } else {
-                emptyBlock.classList.add('hidden'); formBlock.classList.remove('hidden');
-                container.innerHTML = cart.map(item => {
-                    const s = getServiceById(item.id);
-                    return `<div class="glass rounded-xl p-4 flex justify-between items-center">
-                        <div><strong>${s.icon} ${s.name}</strong><br><span class="text-sm text-gray-500">${s.price} ₽ ${s.unit ? '/ ' + s.unit : ''} × ${item.quantity}</span></div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="updateCartQuantity('${item.id}', -1)" class="px-2 py-1 bg-gray-100 rounded">-</button>
-                            <span class="font-bold">${item.quantity}</span>
-                            <button onclick="updateCartQuantity('${item.id}', 1)" class="px-2 py-1 bg-gray-100 rounded">+</button>
-                            <button onclick="removeFromCart('${item.id}')" class="text-red-400 ml-2">✕</button>
-                        </div>
-                    </div>`;
-                }).join('');
-                totalSpan.textContent = getCartTotal().toLocaleString() + ' ₽';
-            }
-        }
+  let cart = JSON.parse(localStorage.getItem('cleanCart') || '[]');
 
-        // ==================== КАЛЕНДАРЬ КЛИЕНТА ====================
-        function populateClientYearSelect() {
-            const select = document.getElementById('clientYearSelect');
-            if (!select) return;
-            select.innerHTML = '';
-            for (let y = 2024; y <= 2035; y++) {
-                const opt = document.createElement('option');
-                opt.value = y; opt.textContent = y;
-                if (y === clientCurrentYear) opt.selected = true;
-                select.appendChild(opt);
-            }
-        }
-        function changeClientMonth(delta) {
-            clientCurrentMonth += delta;
-            if (clientCurrentMonth > 11) { clientCurrentMonth = 0; clientCurrentYear++; }
-            else if (clientCurrentMonth < 0) { clientCurrentMonth = 11; clientCurrentYear--; }
-            populateClientYearSelect();
-            selectedDate = null; selectedTime = null;
-            renderCalendar(); renderClientTimeSlots();
-        }
-        function changeClientYear() {
-            clientCurrentYear = parseInt(document.getElementById('clientYearSelect').value);
-            selectedDate = null; selectedTime = null;
-            renderCalendar(); renderClientTimeSlots();
-        }
-        function isSlotBooked(date, time) { return bookedSlots.some(s => s.date === date && s.time === time); }
-        function getBookedTimesForDate(date) { return bookedSlots.filter(s => s.date === date).map(s => s.time); }
+  let selectedDate = null;
+  let selectedTime = null;
 
-        function renderCalendar() {
-            const container = document.getElementById('calendarWidget');
-            if (!container) return;
-            const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-            document.getElementById('clientMonthLabel').textContent = `${monthNames[clientCurrentMonth]} ${clientCurrentYear}`;
-            const daysInMonth = new Date(clientCurrentYear, clientCurrentMonth + 1, 0).getDate();
-            const firstDayOfWeek = new Date(clientCurrentYear, clientCurrentMonth, 1).getDay();
-            const today = new Date(); today.setHours(0,0,0,0);
-            let html = `<div class="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">` + ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'].map(d => `<div class="text-center">${d}</div>`).join('') + `</div><div class="grid grid-cols-7 gap-1">`;
-            for (let i = 0; i < firstDayOfWeek; i++) html += `<div class="calendar-day empty"></div>`;
-            for (let day = 1; day <= daysInMonth; day++) {
-                const dateStr = `${clientCurrentYear}-${String(clientCurrentMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                const currentDate = new Date(clientCurrentYear, clientCurrentMonth, day);
-                const isPast = currentDate < today;
-                const bookedTimes = getBookedTimesForDate(dateStr);
-                const fullyBooked = bookedTimes.length === 10;
-                const hasBooked = bookedTimes.length > 0;
-                const isSelected = selectedDate === dateStr;
-                let cls = 'calendar-day';
-                if (isPast) cls += ' past';
-                else if (fullyBooked) cls += ' booked';
-                else if (hasBooked && !fullyBooked) cls += ' partial';
-                if (isSelected && !isPast && !fullyBooked) cls += ' selected';
-                const clickHandler = (isPast || fullyBooked) ? '' : `onclick="selectClientDate('${dateStr}')"`;
-                html += `<div class="${cls}" data-date="${dateStr}" ${clickHandler}>${day}</div>`;
-            }
-            html += `</div>`;
-            container.innerHTML = html;
-            renderClientTimeSlots();
-        }
-        function selectClientDate(dateStr) {
-            const today = new Date(); today.setHours(0,0,0,0);
-            if (new Date(dateStr) < today) return;
-            if (getBookedTimesForDate(dateStr).length === 10) return;
-            selectedDate = dateStr; selectedTime = null;
-            renderCalendar(); renderClientTimeSlots();
-        }
-        function renderClientTimeSlots() {
-            const container = document.getElementById('timeSlotsWidget');
-            if (!container) return;
-            if (!selectedDate) { container.innerHTML = '<p class="text-gray-400 text-center">Сначала выберите дату</p>'; return; }
-            const slots = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'];
-            const bookedTimes = getBookedTimesForDate(selectedDate);
-            container.innerHTML = slots.map(t => {
-                const isBooked = bookedTimes.includes(t);
-                const isSelected = selectedTime === t;
-                return `<div class="time-slot${isBooked ? ' booked' : ''}${isSelected && !isBooked ? ' selected' : ''}" onclick="${isBooked ? '' : `selectClientTime('${t}')`}">${t}</div>`;
-            }).join('');
-        }
-        function selectClientTime(time) { if (!isSlotBooked(selectedDate, time)) { selectedTime = time; renderClientTimeSlots(); } }
+  let clientCurrentMonth = new Date().getMonth();
+  let clientCurrentYear = new Date().getFullYear();
 
-        // ==================== АДМИНИСТРАТИВНАЯ ПАНЕЛЬ ====================
-        function openAdminPanel() {
-            const password = prompt('Введите пароль администратора:');
-            if (password !== ADMIN_PASSWORD) { showToast('Неверный пароль'); return; }
-            document.getElementById('adminModal').classList.remove('hidden');
-            adminCurrentYear = new Date().getFullYear();
-            adminCurrentMonth = new Date().getMonth();
-            adminSelectedDate = null;
-            populateYearSelect();
-            renderAdminCalendar();
-            renderAdminBookedSlotsList();
-        }
-        function closeAdminPanel() { document.getElementById('adminModal').classList.add('hidden'); }
-        function populateYearSelect() {
-            const select = document.getElementById('adminYearSelect');
-            select.innerHTML = '';
-            for (let y = 2024; y <= 2035; y++) {
-                const opt = document.createElement('option');
-                opt.value = y; opt.textContent = y;
-                if (y === adminCurrentYear) opt.selected = true;
-                select.appendChild(opt);
-            }
-        }
-        function changeAdminMonth(delta) {
-            adminCurrentMonth += delta;
-            if (adminCurrentMonth > 11) { adminCurrentMonth = 0; adminCurrentYear++; }
-            else if (adminCurrentMonth < 0) { adminCurrentMonth = 11; adminCurrentYear--; }
-            populateYearSelect();
-            adminSelectedDate = null;
-            renderAdminCalendar(); renderAdminTimeSlots(); renderAdminBookedSlotsList();
-        }
-        function changeAdminYear() {
-            adminCurrentYear = parseInt(document.getElementById('adminYearSelect').value);
-            adminSelectedDate = null;
-            renderAdminCalendar(); renderAdminTimeSlots(); renderAdminBookedSlotsList();
-        }
-        function renderAdminCalendar() {
-            const container = document.getElementById('adminCalendar');
-            if (!container) return;
-            const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-            document.getElementById('adminMonthLabel').textContent = `${monthNames[adminCurrentMonth]} ${adminCurrentYear}`;
-            document.getElementById('adminCurrentMonthLabel').textContent = `${monthNames[adminCurrentMonth]} ${adminCurrentYear}`;
-            const daysInMonth = new Date(adminCurrentYear, adminCurrentMonth + 1, 0).getDate();
-            const firstDayOfWeek = new Date(adminCurrentYear, adminCurrentMonth, 1).getDay();
-            let html = `<div class="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">` + ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'].map(d => `<div class="text-center">${d}</div>`).join('') + `</div><div class="grid grid-cols-7 gap-1">`;
-            for (let i = 0; i < firstDayOfWeek; i++) html += `<div class="calendar-day empty"></div>`;
-            for (let day = 1; day <= daysInMonth; day++) {
-                const dateStr = `${adminCurrentYear}-${String(adminCurrentMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                const bookedTimes = getBookedTimesForDate(dateStr);
-                const fullyBooked = bookedTimes.length === 10;
-                const hasBooked = bookedTimes.length > 0;
-                const isSelected = adminSelectedDate === dateStr;
-                let cls = 'calendar-day';
-                if (fullyBooked) cls += ' booked';
-                else if (hasBooked && !fullyBooked) cls += ' partial';
-                if (isSelected) cls += ' selected';
-                html += `<div class="${cls}" data-date="${dateStr}" onclick="adminSelectDate('${dateStr}')">${day}</div>`;
-            }
-            html += `</div>`;
-            container.innerHTML = html;
-            renderAdminTimeSlots();
-        }
-        function adminSelectDate(dateStr) {
-            adminSelectedDate = dateStr;
-            document.getElementById('adminSelectedDateLabel').textContent = dateStr;
-            document.getElementById('adminTimeSlots').classList.remove('hidden');
-            renderAdminCalendar(); renderAdminTimeSlots();
-        }
-        function renderAdminTimeSlots() {
-            const grid = document.getElementById('adminTimeSlotsGrid');
-            if (!grid || !adminSelectedDate) { document.getElementById('adminTimeSlots').classList.add('hidden'); return; }
-            const slots = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'];
-            const bookedTimes = getBookedTimesForDate(adminSelectedDate);
-            grid.innerHTML = slots.map(t => {
-                const isBooked = bookedTimes.includes(t);
-                return `<div class="time-slot${isBooked ? ' booked' : ''}" onclick="toggleAdminTimeSlot('${t}')">${t}</div>`;
-            }).join('');
-        }
-        function toggleAdminTimeSlot(time) {
-            if (!adminSelectedDate) return;
-            const index = bookedSlots.findIndex(s => s.date === adminSelectedDate && s.time === time);
-            if (index > -1) bookedSlots.splice(index, 1);
-            else bookedSlots.push({ date: adminSelectedDate, time: time });
-            localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
-            renderAdminTimeSlots(); renderAdminCalendar(); renderAdminBookedSlotsList();
-        }
-        function renderAdminBookedSlotsList() {
-            const list = document.getElementById('adminBookedSlotsList');
-            if (!list) return;
-            const monthSlots = bookedSlots.filter(s => {
-                const d = new Date(s.date);
-                return d.getFullYear() === adminCurrentYear && d.getMonth() === adminCurrentMonth;
-            });
-            if (monthSlots.length === 0) { list.innerHTML = '<p class="text-gray-400">Нет занятых слотов</p>'; return; }
-            list.innerHTML = monthSlots.map(s => `
-                <div class="flex justify-between items-center bg-red-50 p-1 rounded">
-                    <span>${s.date} ${s.time}</span>
-                    <button onclick="removeBookedSlot('${s.date}','${s.time}')" class="text-red-500 text-xs">✕</button>
-                </div>
-            `).join('');
-        }
-        function removeBookedSlot(date, time) {
-            bookedSlots = bookedSlots.filter(s => !(s.date === date && s.time === time));
-            localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
-            renderAdminTimeSlots(); renderAdminCalendar(); renderAdminBookedSlotsList();
-        }
-        function clearAllBooked() {
-            if (confirm('Удалить все занятые слоты?')) {
-                bookedSlots = [];
-                localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
-                renderAdminCalendar(); renderAdminTimeSlots(); renderAdminBookedSlotsList();
-            }
-        }
+  let adminCurrentMonth = new Date().getMonth();
+  let adminCurrentYear = new Date().getFullYear();
+  let adminSelectedDate = null;
 
-        // ==================== УСЛУГИ ====================
-        function renderServices() {
-            const grid = document.getElementById('allServicesGrid');
-            const filterContainer = document.getElementById('filterButtons');
-            const categories = ['all', ...new Set(services.map(s => s.category))];
-            filterContainer.innerHTML = categories.map(c => `<button class="filter-btn px-5 py-2 rounded-xl text-sm font-medium ${c===currentFilter?'active':''}" onclick="filterServices('${c}')">${c==='all'?'Все':c}</button>`).join('');
-            const filtered = currentFilter === 'all' ? services : services.filter(s => s.category === currentFilter);
-            grid.innerHTML = filtered.map(s => `
-                <div class="glass rounded-2xl p-6 hover-lift flex flex-col h-full">
-                    <div class="text-4xl mb-3">${s.icon}</div>
-                    <h3 class="font-bold text-lg">${s.name}</h3>
-                    <p class="text-sm text-gray-500 mb-2 flex-1">${s.desc || ''}</p>
-                    <p class="text-2xl font-bold text-teal-600 mb-3">${s.price.toLocaleString()} ₽${s.unit ? ' / ' + s.unit : ''}</p>
-                    <button onclick="addToCart('${s.id}')" class="mt-auto w-full bg-teal-500 text-white py-2 rounded-xl hover:bg-teal-600">В корзину</button>
-                </div>
-            `).join('');
-        }
-        function filterServices(cat) { currentFilter = cat; renderServices(); }
+  // ==================== Инициализация ====================
+  window.onload = () => {
+    renderServices();
+    updateCartBadge();
+    if (currentUser) renderProfile();
+    if (!cocoModel) loadModel();
+  };
 
-        // ==================== AI МОДЕЛЬ ====================
-        async function loadModel() {
-            document.getElementById('modelStatus').textContent = 'Загрузка модели распознавания...';
-            try {
-                cocoModel = await cocoSsd.load();
-                document.getElementById('modelStatus').textContent = '✅ Модель готова. Можно загружать фото.';
-            } catch(e) {
-                document.getElementById('modelStatus').textContent = '❌ Ошибка загрузки модели. Попробуйте позже.';
-                console.error(e);
-            }
-        }
-        function handleAIImage(input) {
-            if (!input.files || !input.files[0]) return;
-            if (!cocoModel) { showToast('Модель ещё загружается, подождите...'); return; }
-            const file = input.files[0];
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = async function() {
-                    document.getElementById('previewImg').src = e.target.result;
-                    document.getElementById('aiUpload').classList.add('hidden');
-                    document.getElementById('aiPreview').classList.remove('hidden');
-                    document.getElementById('aiResult').classList.add('hidden');
-                    document.getElementById('aiProgress').classList.remove('hidden');
-                    document.getElementById('aiStatusText').textContent = 'Распознаём объекты...';
-                    document.getElementById('aiProgressBar').style.width = '0%';
-                    setTimeout(() => updateProgress(30, 'Анализируем изображение...'), 300);
-                    setTimeout(() => updateProgress(70, 'Ищем мебель, окна, технику...'), 800);
-                    const predictions = await cocoModel.detect(img);
-                    setTimeout(() => finishAIAnalysis(predictions, img), 1200);
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-        function updateProgress(percent, text) {
-            document.getElementById('aiProgressBar').style.width = percent + '%';
-            document.getElementById('aiStatusText').textContent = text;
-        }
-        function finishAIAnalysis(predictions, img) {
-            updateProgress(100, 'Готово!');
-            document.getElementById('aiProgress').classList.add('hidden');
-            const detectedObjects = predictions.filter(p => p.score > 0.5).map(p => p.class);
-            const uniqueObjects = [...new Set(detectedObjects)];
-            const canvas = document.getElementById('analysisCanvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = 200; canvas.height = 150;
-            ctx.drawImage(img, 0, 0, 200, 150);
-            const imageData = ctx.getImageData(0, 0, 200, 150);
-            const data = imageData.data;
-            let highSatPixels = 0;
-            for (let i = 0; i < data.length; i += 4) {
-                const r = data[i], g = data[i+1], b = data[i+2];
-                const max = Math.max(r,g,b), min = Math.min(r,g,b);
-                const saturation = max === 0 ? 0 : (max - min) / max;
-                if (saturation > 0.7) highSatPixels++;
-            }
-            const stainDetected = highSatPixels > 0.03 * (data.length / 4);
-            let recommended = [];
-            uniqueObjects.forEach(obj => {
-                services.forEach(s => {
-                    if (s.aiObjects.includes(obj) && !recommended.find(r => r.id === s.id)) {
-                        recommended.push(s);
-                    }
-                });
-            });
-            if (recommended.length === 0) recommended.push(getServiceById('gen_apt'));
-            const resultDiv = document.getElementById('aiResult');
-            resultDiv.innerHTML = `
-                <div class="bg-gradient-to-r from-teal-50 to-green-50 p-5 rounded-xl mb-4 border border-teal-200">
-                    <p class="text-lg font-bold text-teal-800">🔍 Распознанные объекты</p>
-                    <div class="flex flex-wrap gap-2 mt-2">
-                        ${uniqueObjects.length > 0 ? uniqueObjects.map(obj => `<span class="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-sm">${obj}</span>`).join('') : '<span class="text-gray-500">Ничего не найдено</span>'}
-                    </div>
-                    ${stainDetected ? '<p class="text-sm text-orange-600 mt-2">⚠️ Обнаружены возможные пятна / загрязнения</p>' : ''}
-                </div>
-                <h4 class="font-bold mb-2">✅ Рекомендуемые услуги:</h4>
-                <div class="space-y-2">
-                    ${recommended.map(s => `
-                        <div class="flex justify-between items-center bg-white p-3 rounded-xl border hover:shadow-md">
-                            <div><span class="font-semibold">${s.icon} ${s.name}</span><span class="text-teal-700 font-bold ml-2">от ${s.price.toLocaleString()} ₽${s.unit ? ' / ' + s.unit : ''}</span></div>
-                            <button onclick="addToCart('${s.id}')" class="bg-teal-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-teal-600">В корзину</button>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="mt-6 text-center border-t border-gray-200 pt-4">
-                    <p class="text-2xl font-black text-gray-800 uppercase tracking-wider">Окончательная сумма после осмотра</p>
-                    <p class="text-sm text-gray-500 mt-1">Точная стоимость будет согласована после осмотра объекта специалистом</p>
-                </div>
-            `;
-            resultDiv.classList.remove('hidden');
-        }
-        function resetAI() {
-            document.getElementById('aiUpload').classList.remove('hidden');
-            document.getElementById('aiPreview').classList.add('hidden');
-            document.getElementById('aiProgress').classList.add('hidden');
-            document.getElementById('aiResult').classList.add('hidden');
-            document.getElementById('aiImageInput').value = '';
-        }
+  // ==================== Общие функции ====================
+  function showToast(msg) {
+    const toast = document.createElement('div');
+    toast.className='toast';
+    toast.innerHTML=msg;
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(),3000);
+  }
 
-        // ==================== ОТПРАВКА ЗАЯВКИ ====================
-        async function submitOrder() {
-            const name = document.getElementById('orderName').value.trim();
-            const phone = document.getElementById('orderPhone').value.trim();
-            if (!name || !phone) { showToast('❌ Заполните имя и телефон'); return; }
-            if (!selectedDate) { showToast('❌ Выберите дату'); return; }
+  function updateCartBadge() {
+    const count=cart.reduce((s,i)=>s+i.quantity,0);
+    const badge=document.getElementById('cartBadge');
+    if (count>0){ badge.textContent=count; badge.classList.remove('hidden'); }
+    else badge.classList.add('hidden');
+  }
 
-            const address = document.getElementById('orderAddress').value;
-            const comment = document.getElementById('orderComment').value;
-            const total = getCartTotal();
-            const items = cart.map(item => {
-                const s = getServiceById(item.id);
-                return `${s.name} (${s.price} ₽${s.unit ? '/'+s.unit : ''}) × ${item.quantity}`;
-            }).join('\n');
+  function navigate(page) {
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+page).classList.add('active');
+    window.scrollTo(0,0);
+    if (page==='services') renderServices();
+    if (page==='cart') { renderCart(); populateClientYearSelect(); renderCalendar(); }
+    if (page==='profile') renderProfile();
+    if (page==='ai' && !cocoModel) loadModel();
+    updateCartBadge();
+    document.getElementById('mobileMenu')?.classList.add('hidden');
+  }
 
-            const formData = new FormData();
-            formData.append('name', name);
-            formData.append('phone', phone);
-            formData.append('address', address);
-            formData.append('desiredDate', selectedDate);
-            formData.append('desiredTime', selectedTime || 'Не указано');
-            formData.append('comment', comment);
-            formData.append('items', items);
-            formData.append('total', total.toLocaleString() + ' ₽');
-            formData.append('timestamp', new Date().toLocaleString());
+  function toggleMobileMenu() {
+    document.getElementById('mobileMenu').classList.toggle('hidden');
+  }
 
-            const photoInput = document.getElementById('orderPhotos');
-            if (photoInput.files) { for (let file of photoInput.files) formData.append('photos', file); }
+  // ==================== Работа с корзиной ====================
+  function saveCart() {
+    localStorage.setItem('cleanCart', JSON.stringify(cart));
+    updateCartBadge();
+  }
 
-            const order = {
-                id: Date.now(), date: new Date().toLocaleString(),
-                name, phone, address,
-                desiredDate: selectedDate, desiredTime: selectedTime || '',
-                comment, items: [...cart], total, status: 'Отправлена'
-            };
-            orders.unshift(order);
-            localStorage.setItem('orders', JSON.stringify(orders));
-            if (currentUser) {
-                currentUser.orders = orders.filter(o => o.phone === currentUser.phone);
-                localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            }
+  function addToCart(id) {
+    const item=cart.find(i=>i.id===id);
+    if (item) item.quantity++;
+    else cart.push({id:id, quantity:1});
+    saveCart();
+    showToast('✅ Добавлено в корзину');
+  }
 
-            try {
-                const response = await fetch(`https://formspree.io/f/${FORMSPREE_FORM_ID}`, {
-                    method: 'POST', body: formData
-                });
-                if (response.ok) {
-                    showToast('✅ Заявка отправлена на agentchistoty51@mail.ru!');
-                } else {
-                    const errorText = await response.text();
-                    console.error('Ошибка Formspree:', response.status, errorText);
-                    showToast(`⚠️ Ошибка отправки (${response.status}). Проверьте настройки формы.`);
-                    alert(`Сервер вернул ошибку ${response.status}:\n${errorText}\n\nВозможные причины:\n- Форма не активирована (подтвердите email)\n- Неверный ID формы\n- Превышен лимит (50 писем/мес)\n- Письмо в спаме`);
-                }
-            } catch (err) {
-                console.error('Сетевая ошибка:', err);
-                showToast('⚠️ Нет связи с сервером. Проверьте интернет.');
-                alert('Не удалось отправить заявку: ' + err.message);
-            }
+  function removeFromCart(id) {
+    cart=cart.filter(i=>i.id!==id);
+    saveCart();
+    renderCart();
+  }
 
-            cart = []; saveCart(); renderCart();
-            selectedDate = null; selectedTime = null;
-            ['orderName','orderPhone','orderAddress','orderComment'].forEach(id => document.getElementById(id).value = '');
-            document.getElementById('orderPhotos').value = '';
-            renderCalendar();
-        }
+  function updateCartQuantity(id, delta) {
+    const item=cart.find(i=>i.id===id);
+    if (!item) return;
+    item.quantity+=delta;
+    if (item.quantity<=0) removeFromCart(id);
+    else { saveCart(); renderCart(); }
+  }
 
-        // ==================== ПРОФИЛЬ ====================
-        function renderProfile() {
-            const notLogged = document.getElementById('profileNotLogged');
-            const logged = document.getElementById('profileLogged');
-            if (currentUser) {
-                notLogged.classList.add('hidden'); logged.classList.remove('hidden');
-                document.getElementById('profileName').textContent = currentUser.name;
-                document.getElementById('profilePhone').textContent = currentUser.phone;
-                const historyDiv = document.getElementById('orderHistory');
-                const userOrders = orders.filter(o => o.phone === currentUser.phone);
-                if (userOrders.length === 0) historyDiv.innerHTML = '<p class="text-gray-400">Нет заказов</p>';
-                else historyDiv.innerHTML = userOrders.map(o => `
-                    <div class="bg-white p-3 rounded-xl border mb-2">
-                        <p class="text-sm font-bold">${o.date} — ${o.total.toLocaleString()} ₽</p>
-                        <p class="text-xs text-gray-500">${o.items.map(i=>getServiceById(i.id)?.name).join(', ')}</p>
-                        <p class="text-xs">📅 ${o.desiredDate || '—'} в ${o.desiredTime || '—'}</p>
-                        <p class="text-xs">Статус: ${o.status}</p>
-                    </div>
-                `).join('');
-            } else {
-                notLogged.classList.remove('hidden'); logged.classList.add('hidden');
-            }
-        }
-        function login() {
-            const name = document.getElementById('loginName').value.trim();
-            const phone = document.getElementById('loginPhone').value.trim();
-            if (!name || !phone) { showToast('Заполните поля'); return; }
-            currentUser = { name, phone, orders: [] };
-            localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            renderProfile();
-            showToast('👋 Добро пожаловать, ' + name + '!');
-        }
-        function logout() {
-            currentUser = null;
-            localStorage.removeItem('currentUser');
-            renderProfile();
-            showToast('Вы вышли из кабинета');
-        }
+  function clearCart() {
+    cart=[];
+    saveCart();
+    renderCart();
+    showToast('Корзина очищена');
+  }
 
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg; toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 3000);
-        }
+  // ==================== Отрисовка корзины ====================
+  function renderCart() {
+    const container=document.getElementById('cartItems');
+    const emptyBlock=document.getElementById('cartEmptyBlock');
+    const formBlock=document.getElementById('cartFormBlock');
+    const totalSpan=document.getElementById('cartTotalPrice');
 
-        // ==================== ИНИЦИАЛИЗАЦИЯ ====================
-        window.onload = function() {
-            renderServices();
-            updateCartBadge();
-            if (currentUser) renderProfile();
-        };
-    </script>
+    if (cart.length===0) {
+      container.innerHTML='';
+      emptyBlock.classList.remove('hidden');
+      formBlock.classList.add('hidden');
+      return;
+    }
+    emptyBlock.classList.add('hidden');
+    formBlock.classList.remove('hidden');
+
+    container.innerHTML=cart.map(i => {
+      const s=getServiceById(i.id);
+      return `<div class="glass rounded-xl p-4 flex justify-between items-center">
+        <div>
+          <strong>${s.icon} ${s.name}</strong><br>
+          <span class="text-sm text-gray-500">${s.price} ₽ ${s.unit ? '/ '+s.unit : ''} × ${i.quantity}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="updateCartQuantity('${i.id}', -1)" class="px-2 py-1 bg-gray-100 rounded">-</button>
+          <span class="font-bold">${i.quantity}</span>
+          <button onclick="updateCartQuantity('${i.id}', 1)" class="px-2 py-1 bg-gray-100 rounded">+</button>
+          <button onclick="removeFromCart('${i.id}')" class="text-red-400 ml-2">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+    totalSpan.textContent=getCartTotal().toLocaleString()+' ₽';
+  }
+
+  function getServiceById(id) {
+    return services.find(s=>s.id===id);
+  }
+
+  function getCartTotal() {
+    return cart.reduce((s,i)=>s + (getServiceById(i.id)?.price || 0)*i.quantity,0);
+  }
+
+  // ==================== Календарь ====================
+  function populateClientYearSelect() {
+    const select=document.getElementById('clientYearSelect');
+    select.innerHTML='';
+    for (let y=2024; y<=2035; y++) {
+      const opt=document.createElement('option');
+      opt.value=y; opt.textContent=y;
+      if (y===clientCurrentYear) opt.selected=true;
+      select.appendChild(opt);
+    }
+  }
+
+  function changeClientMonth(delta) {
+    clientCurrentMonth+=delta;
+    if (clientCurrentMonth>11){clientCurrentMonth=0; clientCurrentYear++;}
+    if (clientCurrentMonth<0){clientCurrentMonth=11; clientCurrentYear--;}
+    populateClientYearSelect();
+    selectedDate=null; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  function changeClientYear() {
+    clientCurrentYear=parseInt(document.getElementById('clientYearSelect').value);
+    selectedDate=null; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  function getBookedTimesForDate(date) {
+    return bookedSlots.filter(s=>s.date===date).map(s=>s.time);
+  }
+
+  function renderCalendar() {
+    const container=document.getElementById('calendarWidget');
+    if (!container) return;
+    const monthNames=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    document.getElementById('clientMonthLabel').textContent=`${monthNames[clientCurrentMonth]} ${clientCurrentYear}`;
+    const daysInMonth=new Date(clientCurrentYear, clientCurrentMonth+1, 0).getDate();
+    const firstDay=new Date(clientCurrentYear, clientCurrentMonth, 1).getDay();
+    const today=new Date(); today.setHours(0,0,0,0);
+    let html=`<div class="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">${['Вс','Пн','Вт','Ср','Чт','Пт','Сб'].map(d=>`<div class="text-center">${d}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1">`;
+    for (let i=0;i<firstDay;i++) html+=`<div class="calendar-day empty"></div>`;
+    for (let d=1; d<=daysInMonth; d++) {
+      const dateStr=`${clientCurrentYear}-${String(clientCurrentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dateObj=new Date(clientCurrentYear,clientCurrentMonth,d);
+      const isPast=dateObj<today;
+      const bookedTimes=getBookedTimesForDate(dateStr);
+      const fullyBooked=bookedTimes.length===10;
+      const hasBooked=bookedTimes.length>0;
+      const isSelected=selectedDate===dateStr;
+      let cls='calendar-day';
+      if (isPast) cls+=' past';
+      if (fullyBooked) cls+=' booked';
+      if (hasBooked && !fullyBooked) cls+=' partial';
+      if (isSelected && !isPast && !fullyBooked) cls+=' selected';
+      let clickAttr=(isPast || fullyBooked)?'':'onclick="selectClientDate(\''+dateStr+'\')"';
+      html+=`<div class="${cls}" data-date="${dateStr}" ${clickAttr}>${d}</div>`;
+    }
+    html+=`</div>`;
+    container.innerHTML=html;
+    renderClientTimeSlots();
+  }
+
+  function selectClientDate(dateStr) {
+    const today=new Date(); today.setHours(0,0,0,0);
+    if (new Date(dateStr)<today) return;
+    if (getBookedTimesForDate(dateStr).length===10) return;
+    selectedDate=dateStr; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  function renderClientTimeSlots() {
+    const container=document.getElementById('timeSlotsWidget');
+    if (!container) return;
+    if (!selectedDate) {
+      container.innerHTML='<p class="text-gray-400 text-center">Сначала выберите дату</p>';
+      return;
+    }
+    const slots=['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'];
+    const bookedTimes=getBookedTimesForDate(selectedDate);
+    container.innerHTML=slots.map(t=>{
+      const isBooked=bookedTimes.includes(t);
+      const isSelected=selectedTime===t;
+      return `<div class="time-slot ${isBooked?'booked':''} ${isSelected&&!isBooked?'selected':''}" onclick="${isBooked?'':'selectClientTime(\\''+t+'\\')'}">${t}</div>`;
+    }).join('');
+  }
+
+  function selectClientTime(t) {
+    if (!isSlotBooked(selectedDate, t)) {
+      selectedTime=t;
+      renderClientTimeSlots();
+    }
+  }
+
+  function isSlotBooked(date,time) {
+    return bookedSlots.some(s=>s.date===date && s.time===time);
+  }
+
+  // ==================== Отправка заявки ====================
+  async function submitOrder() {
+    const name=document.getElementById('orderName').value.trim();
+    const phone=document.getElementById('orderPhone').value.trim();
+    if (!name || !phone) { showToast('❌ Заполните имя и телефон'); return; }
+    if (!selectedDate) { showToast('❌ Выберите дату'); return; }
+
+    const address=document.getElementById('orderAddress').value;
+    const comment=document.getElementById('orderComment').value;
+    const total=getCartTotal();
+    const items=cart.map(i=>{
+      const s=getServiceById(i.id);
+      return `${s.name} (${s.price} ₽${s.unit?'/'+s.unit:''}) × ${i.quantity}`;
+    }).join('\n');
+
+    // Создаем FormData для отправки
+    const formData=new FormData();
+    formData.append('name', name);
+    formData.append('phone', phone);
+    formData.append('address', address);
+    formData.append('desiredDate', selectedDate);
+    formData.append('desiredTime', selectedTime || 'Не указано');
+    formData.append('comment', comment);
+    formData.append('items', items);
+    formData.append('total', getCartTotal().toLocaleString()+' ₽');
+    formData.append('timestamp', new Date().toLocaleString());
+
+    // Фото
+    const photos=document.getElementById('orderPhotos');
+    if (photos.files) {
+      for (let file of photos.files) formData.append('photos', file);
+    }
+
+    // Сохраняем заказ в localStorage
+    const order={ id: Date.now(), date: new Date().toLocaleString(), name, phone, address, desiredDate:selectedDate, desiredTime:selectedTime || '', comment, items: [...cart], total: getCartTotal().toLocaleString()+' ₽', status:'Отправлена' };
+    orders.unshift(order);
+    localStorage.setItem('orders', JSON.stringify(orders));
+    if (currentUser) {
+      currentUser.orders=orders.filter(o=>o.phone===currentUser.phone);
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    }
+    // Отправка на Formspree
+    try {
+      const response=await fetch(`https://formspree.io/f/${FORMSPREE_FORM_ID}`, { method:'POST', body:formData });
+      if (response.ok) {
+        showToast('✅ Заявка отправлена!');
+      } else {
+        const errText=await response.text();
+        console.error('Ошибка:', response.status, errText);
+        showToast(`⚠️ Ошибка (${response.status})`);
+        alert(`Ошибка: ${errText}`);
+      }
+    } catch(e) {
+      console.error('Ошибка сети', e);
+      showToast('⚠️ Нет связи с сервером.');
+    }
+    // Очистка формы
+    cart=[]; saveCart();
+    document.getElementById('orderName').value='';
+    document.getElementById('orderPhone').value='';
+    document.getElementById('orderAddress').value='';
+    document.getElementById('orderComment').value='';
+    document.getElementById('orderPhotos').value='';
+    selectedDate=null; selectedTime=null;
+    renderCalendar();
+  }
+
+  // ==================== Профиль ====================
+  function renderProfile() {
+    const notLogged=document.getElementById('profileNotLogged');
+    const logged=document.getElementById('profileLogged');
+    if (currentUser) {
+      notLogged.classList.add('hidden');
+      logged.classList.remove('hidden');
+      document.getElementById('profileName').textContent=currentUser.name;
+      document.getElementById('profilePhone').textContent=currentUser.phone;
+      const userOrders=orders.filter(o=>o.phone===currentUser.phone);
+      const historyDiv=document.getElementById('orderHistory');
+      if (userOrders.length===0) {
+        historyDiv.innerHTML='<p class="text-gray-400">Нет заказов</p>';
+      } else {
+        historyDiv.innerHTML=userOrders.map(o=>`
+          <div class="bg-white p-3 rounded-xl border mb-2">
+            <p class="text-sm font-bold">${o.date} — ${o.total}</p>
+            <p class="text-xs text-gray-500">${o.items.map(i=>getServiceById(i.id)?.name).join(', ')}</p>
+            <p class="text-xs">📅 ${o.desiredDate || '—'} в ${o.desiredTime || '—'}</p>
+            <p class="text-xs">Статус: ${o.status}</p>
+          </div>`).join('');
+      }
+    } else {
+      notLogged.classList.remove('hidden');
+      logged.classList.add('hidden');
+    }
+  }
+
+  function login() {
+    const name=document.getElementById('loginName').value.trim();
+    const phone=document.getElementById('loginPhone').value.trim();
+    if (!name || !phone) { showToast('Заполните поля'); return; }
+    currentUser={name, phone, orders:[]};
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    renderProfile();
+    showToast('👋 Добро пожаловать, '+name);
+  }
+
+  function logout() {
+    currentUser=null;
+    localStorage.removeItem('currentUser');
+    renderProfile();
+    showToast('Вы вышли из кабинета');
+  }
+
+  // ==================== AI ====================
+  async function loadModel() {
+    document.getElementById('modelStatus').textContent='Загрузка модели распознавания...';
+    try {
+      cocoModel=await cocoSsd.load();
+      document.getElementById('modelStatus').textContent='✅ Модель готова. Можно загружать фото.';
+    } catch(e) {
+      document.getElementById('modelStatus').textContent='❌ Ошибка загрузки модели.';
+    }
+  }
+
+  async function handleAIImage(input) {
+    if (!cocoModel) { alert('Модель не загружена'); return; }
+    const file=input.files[0];
+    if (!file) return;
+    const reader=new FileReader();
+    reader.onload=async ()=> {
+      const img=document.createElement('img');
+      img.src=reader.result;
+      await new Promise(r=>img.onload=r);
+      document.getElementById('previewImg').src=img.src;
+      document.getElementById('aiPreview').classList.remove('hidden');
+      document.getElementById('aiProgress').classList.remove('hidden');
+      document.getElementById('aiResult').classList.add('hidden');
+
+      // Анализ
+      analyzeImage(img);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyzeImage(img) {
+    document.getElementById('aiStatusText').textContent='Анализируем изображение…';
+    document.getElementById('aiProgressBar').style.width='0%';
+
+    // Обновление прогресса
+    let progress=0;
+    const interval=setInterval(()=> {
+      progress+=10;
+      if (progress>100) progress=100;
+      document.getElementById('aiProgressBar').style.width=progress+'%';
+    }, 200);
+
+    const predictions=await cocoModel.detect(img);
+    clearInterval(interval);
+    document.getElementById('aiProgressBar').style.width='100%';
+
+    // Обработка результата
+    let objects=predictions.map(p=>p.class).join(', ');
+    document.getElementById('aiResult').innerHTML=`
+      <h4 class="font-semibold mb-2">Обнаружено объектов:</h4>
+      <p class="text-sm">${objects}</p>
+    `;
+    document.getElementById('aiResult').classList.remove('hidden');
+    document.getElementById('aiProgress').classList.add('hidden');
+    document.getElementById('aiStatusText').textContent='Анализ завершен';
+
+    // Предложить услуги по объектам
+    suggestServicesByObjects(predictions);
+  }
+
+  function suggestServicesByObjects(objects) {
+    const objClasses=objects.map(o=>o.class);
+    const matchedServices=services.filter(s=>s.aiObjects.some(a=>objClasses.includes(a)));
+    alert('Обнаружено: '+objClasses.join(', ')+'\nРекомендуемые услуги:\n'+matchedServices.map(s=>s.name).join('\n'));
+  }
+
+  function resetAI() {
+    document.getElementById('previewImg').src='';
+    document.getElementById('aiPreview').classList.add('hidden');
+    document.getElementById('aiResult').classList.add('hidden');
+    document.getElementById('aiProgress').classList.add('hidden');
+    document.getElementById('aiStatusText').textContent='Загрузка модели распознавания...';
+  }
+
+  // ==================== Дополнительные функции ====================
+  function openAdminPanel() {
+    const pass=prompt('Введите пароль администратора:');
+    if (pass!==ADMIN_PASSWORD) { showToast('Неверный пароль'); return; }
+    document.getElementById('adminModal').classList.remove('hidden');
+    populateYearSelect();
+    renderAdminCalendar();
+    renderAdminBookedSlotsList();
+  }
+
+  function closeAdminPanel() {
+    document.getElementById('adminModal').classList.add('hidden');
+  }
+
+  function populateYearSelect() {
+    const select=document.getElementById('adminYearSelect');
+    select.innerHTML='';
+    for (let y=2024; y<=2035; y++) {
+      const opt=document.createElement('option');
+      opt.value=y; opt.textContent=y;
+      if (y===adminCurrentYear) opt.selected=true;
+      select.appendChild(opt);
+    }
+  }
+
+  function changeAdminMonth(delta) {
+    adminCurrentMonth+=delta;
+    if (adminCurrentMonth>11){adminCurrentMonth=0; adminCurrentYear++;}
+    if (adminCurrentMonth<0){adminCurrentMonth=11; adminCurrentYear--;}
+    populateYearSelect();
+    adminSelectedDate=null;
+    renderAdminCalendar();
+    renderAdminBookedSlotsList();
+    renderAdminTimeSlots();
+  }
+
+  function changeAdminYear() {
+    adminCurrentYear=parseInt(document.getElementById('adminYearSelect').value);
+    adminSelectedDate=null;
+    renderAdminCalendar();
+    renderAdminBookedSlotsList();
+    renderAdminTimeSlots();
+  }
+
+  function renderAdminCalendar() {
+    const container=document.getElementById('adminCalendar');
+    if (!container) return;
+    const monthNames=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    document.getElementById('adminMonthLabel').textContent=`${monthNames[adminCurrentMonth]} ${adminCurrentYear}`;
+    document.getElementById('adminCurrentMonthLabel').textContent=`${monthNames[adminCurrentMonth]} ${adminCurrentYear}`;
+    const daysInMonth=new Date(adminCurrentYear, adminCurrentMonth+1, 0).getDate();
+    const firstDay=new Date(adminCurrentYear, adminCurrentMonth, 1).getDay();
+    let html=`<div class="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">${['Вс','Пн','Вт','Ср','Чт','Пт','Сб'].map(d=>`<div class="text-center">${d}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1">`;
+    for (let i=0;i<firstDay;i++) html+=`<div class="calendar-day empty"></div>`;
+    for (let d=1; d<=daysInMonth; d++) {
+      const dateStr=`${adminCurrentYear}-${String(adminCurrentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const bookedTimes=getBookedTimesForDate(dateStr);
+      const fullyBooked=bookedTimes.length===10;
+      let cls='calendar-day';
+      if (fullyBooked) cls+=' booked';
+      html+=`<div class="${cls}" data-date="${dateStr}" onclick="adminSelectDate('${dateStr}')">${d}</div>`;
+    }
+    html+='</div>';
+    container.innerHTML=html;
+  }
+
+  function adminSelectDate(dateStr) {
+    adminSelectedDate=dateStr;
+    document.getElementById('adminSelectedDateLabel').textContent=dateStr;
+    document.getElementById('adminTimeSlots').classList.remove('hidden');
+    renderAdminTimeSlots();
+  }
+
+  function renderAdminTimeSlots() {
+    const grid=document.getElementById('adminTimeSlotsGrid');
+    if (!grid || !adminSelectedDate) {
+      document.getElementById('adminTimeSlots').classList.add('hidden');
+      return;
+    }
+    const slots=['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'];
+    const bookedTimes=getBookedTimesForDate(adminSelectedDate);
+    grid.innerHTML=slots.map(t => `<div class="time-slot ${bookedTimes.includes(t)?'booked':''}" onclick="toggleAdminTimeSlot('${t}')">${t}</div>`).join('');
+  }
+
+  function toggleAdminTimeSlot(time) {
+    if (!adminSelectedDate) return;
+    const index=bookedSlots.findIndex(s=>s.date===adminSelectedDate && s.time===time);
+    if (index>-1) { bookedSlots.splice(index,1); } else { bookedSlots.push({date:adminSelectedDate, time:time}); }
+    localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
+    renderAdminTimeSlots(); renderAdminCalendar(); renderAdminBookedSlotsList();
+  }
+
+  function renderAdminBookedSlotsList() {
+    const list=document.getElementById('adminBookedSlotsList');
+    if (!list) return;
+    const monthSlots=bookedSlots.filter(s=>{
+      const d=new Date(s.date);
+      return d.getFullYear()===adminCurrentYear && d.getMonth()===adminCurrentMonth;
+    });
+    if (monthSlots.length===0) { list.innerHTML='<p class="text-gray-400">Нет занятых слотов</p>'; return; }
+    list.innerHTML=monthSlots.map(s=>`
+      <div class="flex justify-between items-center bg-red-50 p-1 rounded">
+        <span>${s.date} ${s.time}</span>
+        <button onclick="removeBookedSlot('${s.date}','${s.time}')" class="text-red-500 text-xs">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function removeBookedSlot(date,time) {
+    bookedSlots=bookedSlots.filter(s=> !(s.date===date && s.time===time));
+    localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
+    renderAdminTimeSlots(); renderAdminCalendar(); renderAdminBookedSlotsList();
+  }
+
+  function clearAllBooked() {
+    if (confirm('Удалить все занятые слоты?')) {
+      bookedSlots=[];
+      localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
+      renderAdminCalendar(); renderAdminTimeSlots(); renderAdminBookedSlotsList();
+    }
+  }
+
+  // ==================== Услуги ====================
+  const services=[
+    {id:'gen_apt', name:'Генеральная уборка квартиры/дома', price:15000, icon:'🏠', category:'Уборка', desc:'Полная уборка помещения', aiObjects:['room']},
+    {id:'repair_wash_floor', name:'Очистка напольного покрытия после ремонта', price:400, unit:'м²', icon:'🧹', category:'После ремонта', desc:'Удаление строительной пыли', aiObjects:['construction']},
+    {id:'window_2', name:'Мойка двухстворчатого окна', price:1500, icon:'🪟', category:'Окна', desc:'', aiObjects:['window']},
+    {id:'window_3', name:'Мойка трёхстворчатого окна', price:2000, icon:'🪟', category:'Окна', desc:'', aiObjects:['window']},
+    {id:'window_nonstand', name:'Мойка нестандартного окна', price:2000, icon:'🪟', category:'Окна', desc:'Арочные, сталинские окна', aiObjects:['window']},
+    {id:'balcony_door', name:'Мойка балконной двери', price:1000, icon:'🚪', category:'Окна', aiObjects:['door']},
+    {id:'balcony_1', name:'Мойка балконного блока (1 створка)', price:1000, icon:'🏢', category:'Окна', aiObjects:['balcony']},
+    {id:'bathroom', name:'Генеральная уборка ванной комнаты', price:4000, icon:'🛁', category:'Санзона', aiObjects:['toilet','sink']},
+    {id:'toilet', name:'Уборка туалета (санузла)', price:2500, icon:'🚽', category:'Санзона', aiObjects:['toilet']},
+    {id:'shower_cabin', name:'Чистка душевой кабины', price:2000, icon:'🚿', category:'Санзона', aiObjects:['shower']},
+    {id:'wash_machine', name:'Чистка стиральной машины', price:1000, icon:'🌀', category:'Техника', aiObjects:['washing machine']},
+    {id:'carpet_clean', name:'Химчистка ковра', price:500, unit:'м²', icon:'🧼', category:'Химчистка и доставка', desc:'Минимальная стоимость 1000 руб.', aiObjects:['carpet','rug']},
+    {id:'sofa', name:'Химчистка дивана', price:4000, icon:'🛋️', category:'Мебель', aiObjects:['couch','sofa']},
+    {id:'chair', name:'Химчистка стула со спинкой', price:1000, icon:'🪑', category:'Мебель', aiObjects:['chair']},
+    {id:'armchair', name:'Химчистка кресла', price:1500, icon:'🛋️', category:'Мебель', aiObjects:['chair']},
+    {id:'mattress_double', name:'Химчистка двуспального матраса', price:4000, icon:'🛏️', category:'Мебель', aiObjects:['bed']},
+    {id:'mattress_single', name:'Химчистка полутороспального матраса', price:3000, icon:'🛏️', category:'Мебель', aiObjects:['bed']},
+    {id:'curtains', name:'Химчистка штор (тюля)', price:400, unit:'м²', icon:'🧴', category:'Шторы и тюль', desc:'Включает снятие, чистку, глажку, вешание', aiObjects:['curtain']},
+    {id:'kitchen', name:'Генеральная уборка кухни', price:7000, icon:'🍳', category:'Кухня', desc:'Мытьё фасадов, столешницы, фартука, мойки', aiObjects:['oven','microwave','refrigerator','sink']},
+    {id:'kitchen_inside', name:'Мойка внутри кухонного гарнитура', price:2000, icon:'🗄️', category:'Кухня', aiObjects:['cabinet']},
+    {id:'ceiling_wash', name:'Мойка потолка', price:400, unit:'м²', icon:'⬆️', category:'Кухня', aiObjects:[]},
+    {id:'kitchen_floor', name:'Очистка напольного покрытия (кухня)', price:400, unit:'м²', icon:'🧹', category:'Кухня', aiObjects:[]},
+    {id:'kettle', name:'Мойка электрического чайника', price:1000, icon:'🫖', category:'Техника', aiObjects:['kettle']},
+    {id:'microwave', name:'Мойка микроволновой печи', price:2000, icon:'📡', category:'Техника', aiObjects:['microwave']},
+    {id:'extractor', name:'Мойка кухонной вытяжки', price:2000, icon:'🌀', category:'Техника', aiObjects:[]},
+    {id:'dishwasher', name:'Мойка посудомоечной машины', price:2000, icon:'🍽️', category:'Техника', aiObjects:['dishwasher']},
+    {id:'refrigerator', name:'Мойка холодильника', price:2000, icon:'❄️', category:'Техника', aiObjects:['refrigerator']},
+    {id:'stove', name:'Мойка варочной панели', price:2000, icon:'🔥', category:'Техника', aiObjects:['oven']},
+    {id:'oven', name:'Мойка духового шкафа', price:2500, icon:'♨️', category:'Техника', aiObjects:['oven']},
+    {id:'tray', name:'Мойка противней и решёток', price:500, icon:'🧼', category:'Техника', aiObjects:[]},
+    {id:'delivery_pickup', name:'Доставка (забор) по Мурманску', price:200, icon:'📦', category:'Химчистка и доставка'},
+    {id:'delivery_return', name:'Доставка (возврат) по Мурманску', price:200, icon:'🚚', category:'Химчистка и доставка'},
+    {id:'inspection', name:'Осмотр (бесплатный)', price:0, icon:'🔍', category:'Осмотр', desc:'Выезд специалиста для оценки объекта'}
+  ];
+
+  // ==================== Стандартные переменные ====================
+  let services=services; // массив услуг
+  let cart=cart; // корзина
+  let currentUser=currentUser; // пользователь
+  let orders=orders; // заказы
+
+  // ==================== Основные функции ====================
+  function showToast(msg) {
+    const toast=document.createElement('div');
+    toast.className='toast';
+    toast.innerHTML=msg;
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(),3000);
+  }
+
+  function updateCartBadge() {
+    const count=cart.reduce((s,i)=>s+i.quantity,0);
+    const badge=document.getElementById('cartBadge');
+    if (count>0){ badge.textContent=count; badge.classList.remove('hidden'); }
+    else badge.classList.add('hidden');
+  }
+
+  function navigate(page) {
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+page).classList.add('active');
+    window.scrollTo(0,0);
+    if (page==='services') renderServices();
+    if (page==='cart') { renderCart(); populateClientYearSelect(); renderCalendar(); }
+    if (page==='profile') renderProfile();
+    if (page==='ai' && !cocoModel) loadModel();
+    updateCartBadge();
+    document.getElementById('mobileMenu')?.classList.add('hidden');
+  }
+
+  function toggleMobileMenu() {
+    document.getElementById('mobileMenu').classList.toggle('hidden');
+  }
+
+  // ==================== Работа с корзиной ====================
+  function saveCart() {
+    localStorage.setItem('cleanCart', JSON.stringify(cart));
+    updateCartBadge();
+  }
+
+  function addToCart(id) {
+    const item=cart.find(i=>i.id===id);
+    if (item) item.quantity++;
+    else cart.push({id:id, quantity:1});
+    saveCart();
+    showToast('✅ Добавлено в корзину');
+  }
+
+  function removeFromCart(id) {
+    cart=cart.filter(i=>i.id!==id);
+    saveCart();
+    renderCart();
+  }
+
+  function updateCartQuantity(id, delta) {
+    const item=cart.find(i=>i.id===id);
+    if (!item) return;
+    item.quantity+=delta;
+    if (item.quantity<=0) removeFromCart(id);
+    else { saveCart(); renderCart(); }
+  }
+
+  function clearCart() {
+    cart=[];
+    saveCart();
+    renderCart();
+    showToast('Корзина очищена');
+  }
+
+  // ==================== Отрисовка ====================
+  function renderServices() {
+    const container=document.getElementById('allServicesGrid');
+    container.innerHTML=services.map(s => `
+      <div class="card p-4 rounded-xl shadow hover:scale-105 transition relative">
+        <div class="text-3xl mb-2">${s.icon}</div>
+        <h3 class="font-bold mb-2">${s.name}</h3>
+        <p class="text-sm mb-2">${s.desc || ''}</p>
+        <div class="flex justify-between items-center">
+          <span class="font-bold">${s.price} ₽${s.unit ? '/ '+s.unit : ''}</span>
+          <button onclick="addToCart('${s.id}')" class="bg-teal-500 text-white px-3 py-1 rounded-xl hover:bg-teal-600">🛒 В корзину</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderCart() {
+    const container=document.getElementById('cartItems');
+    const emptyBlock=document.getElementById('cartEmptyBlock');
+    const formBlock=document.getElementById('cartFormBlock');
+    const totalSpan=document.getElementById('cartTotalPrice');
+
+    if (cart.length===0) {
+      container.innerHTML='';
+      emptyBlock.classList.remove('hidden');
+      formBlock.classList.add('hidden');
+      return;
+    }
+    emptyBlock.classList.add('hidden');
+    formBlock.classList.remove('hidden');
+
+    container.innerHTML=cart.map(i => {
+      const s=getServiceById(i.id);
+      return `<div class="glass rounded-xl p-4 flex justify-between items-center">
+        <div>
+          <strong>${s.icon} ${s.name}</strong><br>
+          <span class="text-sm text-gray-500">${s.price} ₽ ${s.unit ? '/ '+s.unit : ''} × ${i.quantity}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="updateCartQuantity('${i.id}', -1)" class="px-2 py-1 bg-gray-100 rounded">-</button>
+          <span class="font-bold">${i.quantity}</span>
+          <button onclick="updateCartQuantity('${i.id}', 1)" class="px-2 py-1 bg-gray-100 rounded">+</button>
+          <button onclick="removeFromCart('${i.id}')" class="text-red-400 ml-2">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+    totalSpan.textContent=getCartTotal().toLocaleString()+' ₽';
+  }
+
+  // ==================== Календарь ====================
+  function populateClientYearSelect() {
+    const select=document.getElementById('clientYearSelect');
+    select.innerHTML='';
+    for (let y=2024; y<=2035; y++) {
+      const opt=document.createElement('option');
+      opt.value=y; opt.textContent=y;
+      if (y===clientCurrentYear) opt.selected=true;
+      select.appendChild(opt);
+    }
+  }
+
+  function changeClientMonth(d) {
+    clientCurrentMonth+=d;
+    if (clientCurrentMonth>11){clientCurrentMonth=0; clientCurrentYear++;}
+    if (clientCurrentMonth<0){clientCurrentMonth=11; clientCurrentYear--;}
+    populateClientYearSelect();
+    selectedDate=null; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  function changeClientYear() {
+    clientCurrentYear=parseInt(document.getElementById('clientYearSelect').value);
+    selectedDate=null; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  function getBookedTimesForDate(date) {
+    return bookedSlots.filter(s=>s.date===date).map(s=>s.time);
+  }
+
+  function renderCalendar() {
+    const container=document.getElementById('calendarWidget');
+    if (!container) return;
+    const monthNames=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    document.getElementById('clientMonthLabel').textContent=`${monthNames[clientCurrentMonth]} ${clientCurrentYear}`;
+    const daysInMonth=new Date(clientCurrentYear, clientCurrentMonth+1, 0).getDate();
+    const firstDay=new Date(clientCurrentYear, clientCurrentMonth, 1).getDay();
+    const today=new Date(); today.setHours(0,0,0,0);
+    let html=`<div class="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">${['Вс','Пн','Вт','Ср','Чт','Пт','Сб'].map(d=>`<div class="text-center">${d}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1">`;
+    for (let i=0;i<firstDay;i++) html+=`<div class="calendar-day empty"></div>`;
+    for (let d=1; d<=daysInMonth; d++) {
+      const dateStr=`${clientCurrentYear}-${String(clientCurrentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dateObj=new Date(clientCurrentYear,clientCurrentMonth,d);
+      const isPast=dateObj<today;
+      const bookedTimes=getBookedTimesForDate(dateStr);
+      const fullyBooked=bookedTimes.length===10;
+      const hasBooked=bookedTimes.length>0;
+      const isSelected=selectedDate===dateStr;
+      let cls='calendar-day';
+      if (isPast) cls+=' past';
+      if (fullyBooked) cls+=' booked';
+      if (hasBooked && !fullyBooked) cls+=' partial';
+      if (isSelected && !isPast && !fullyBooked) cls+=' selected';
+      let clickAttr=(isPast || fullyBooked)?'':'onclick="selectClientDate(\''+dateStr+'\')"';
+      html+=`<div class="${cls}" data-date="${dateStr}" ${clickAttr}>${d}</div>`;
+    }
+    html+=`</div>`;
+    document.getElementById('calendarWidget').innerHTML=html;
+    renderClientTimeSlots();
+  }
+
+  function selectClientDate(dateStr) {
+    const today=new Date(); today.setHours(0,0,0,0);
+    if (new Date(dateStr)<today) return;
+    if (getBookedTimesForDate(dateStr).length===10) return;
+    selectedDate=dateStr; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  function renderClientTimeSlots() {
+    const container=document.getElementById('timeSlotsWidget');
+    if (!container) return;
+    if (!selectedDate) {
+      container.innerHTML='<p class="text-gray-400 text-center">Сначала выберите дату</p>';
+      return;
+    }
+    const slots=['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'];
+    const bookedTimes=getBookedTimesForDate(selectedDate);
+    container.innerHTML=slots.map(t=>{
+      const isBooked=bookedTimes.includes(t);
+      const isSelected=selectedTime===t;
+      return `<div class="time-slot ${isBooked?'booked':''} ${isSelected&&!isBooked?'selected':''}" onclick="${isBooked?'':'selectClientTime(\\''+t+'\\')'}">${t}</div>`;
+    }).join('');
+  }
+
+  function selectClientTime(t) {
+    if (!isSlotBooked(selectedDate, t)) {
+      selectedTime=t;
+      renderClientTimeSlots();
+    }
+  }
+
+  function isSlotBooked(date,time) {
+    return bookedSlots.some(s=>s.date===date && s.time===time);
+  }
+
+  // ==================== Отправка ====================
+  async function submitOrder() {
+    const name=document.getElementById('orderName').value.trim();
+    const phone=document.getElementById('orderPhone').value.trim();
+    if (!name || !phone) { showToast('❌ Заполните имя и телефон'); return; }
+    if (!selectedDate) { showToast('❌ Выберите дату'); return; }
+
+    const address=document.getElementById('orderAddress').value;
+    const comment=document.getElementById('orderComment').value;
+    const total=getCartTotal();
+    const items=cart.map(i=>{
+      const s=getServiceById(i.id);
+      return `${s.name} (${s.price} ₽${s.unit?'/'+s.unit:''}) × ${i.quantity}`;
+    }).join('\n');
+
+    const formData=new FormData();
+    formData.append('name', name);
+    formData.append('phone', phone);
+    formData.append('address', address);
+    formData.append('desiredDate', selectedDate);
+    formData.append('desiredTime', selectedTime || 'Не указано');
+    formData.append('comment', comment);
+    formData.append('items', items);
+    formData.append('total', getCartTotal().toLocaleString()+' ₽');
+    formData.append('timestamp', new Date().toLocaleString());
+
+    const photos=document.getElementById('orderPhotos');
+    if (photos.files) {
+      for (let file of photos.files) formData.append('photos', file);
+    }
+
+    const order={ id: Date.now(), date: new Date().toLocaleString(), name, phone, address, desiredDate:selectedDate, desiredTime:selectedTime || '', comment, items: [...cart], total: getCartTotal().toLocaleString()+' ₽', status:'Отправлена' };
+    orders.unshift(order);
+    localStorage.setItem('orders', JSON.stringify(orders));
+    if (currentUser) {
+      currentUser.orders=orders.filter(o=>o.phone===currentUser.phone);
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    }
+
+    try {
+      const response=await fetch(`https://formspree.io/f/${FORMSPREE_FORM_ID}`, { method:'POST', body:formData });
+      if (response.ok) {
+        showToast('✅ Заявка отправлена на agentchistoty51@mail.ru!');
+      } else {
+        const errText=await response.text();
+        console.error('Ошибка:', response.status, errText);
+        showToast(`⚠️ Ошибка (${response.status})`);
+        alert(`Ошибка: ${errText}`);
+      }
+    } catch(e) {
+      console.error('Ошибка сети', e);
+      showToast('⚠️ Нет связи с сервером.');
+    }
+
+    // Очистка
+    cart=[]; saveCart();
+    document.getElementById('orderName').value='';
+    document.getElementById('orderPhone').value='';
+    document.getElementById('orderAddress').value='';
+    document.getElementById('orderComment').value='';
+    document.getElementById('orderPhotos').value='';
+    selectedDate=null; selectedTime=null;
+    renderCalendar();
+  }
+
+  // ==================== Профиль ====================
+  function renderProfile() {
+    const notLogged=document.getElementById('profileNotLogged');
+    const logged=document.getElementById('profileLogged');
+    if (currentUser) {
+      notLogged.classList.add('hidden');
+      logged.classList.remove('hidden');
+      document.getElementById('profileName').textContent=currentUser.name;
+      document.getElementById('profilePhone').textContent=currentUser.phone;
+      const userOrders=orders.filter(o=>o.phone===currentUser.phone);
+      const historyDiv=document.getElementById('orderHistory');
+      if (userOrders.length===0) {
+        historyDiv.innerHTML='<p class="text-gray-400">Нет заказов</p>';
+      } else {
+        historyDiv.innerHTML=userOrders.map(o=>`
+          <div class="bg-white p-3 rounded-xl border mb-2">
+            <p class="text-sm font-bold">${o.date} — ${o.total}</p>
+            <p class="text-xs text-gray-500">${o.items.map(i=>getServiceById(i.id)?.name).join(', ')}</p>
+            <p class="text-xs">📅 ${o.desiredDate || '—'} в ${o.desiredTime || '—'}</p>
+            <p class="text-xs">Статус: ${o.status}</p>
+          </div>`).join('');
+      }
+    } else {
+      notLogged.classList.remove('hidden');
+      logged.classList.add('hidden');
+    }
+  }
+
+  function login() {
+    const name=document.getElementById('loginName').value.trim();
+    const phone=document.getElementById('loginPhone').value.trim();
+    if (!name || !phone) { showToast('Заполните поля'); return; }
+    currentUser={name, phone, orders:[]};
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    renderProfile();
+    showToast('👋 Добро пожаловать, '+name);
+  }
+
+  function logout() {
+    currentUser=null;
+    localStorage.removeItem('currentUser');
+    renderProfile();
+    showToast('Вы вышли из кабинета');
+  }
+
+  // ==================== ИИ ====================
+  async function loadModel() {
+    document.getElementById('modelStatus').textContent='Загрузка модели распознавания...';
+    try {
+      cocoModel=await cocoSsd.load();
+      document.getElementById('modelStatus').textContent='✅ Модель готова. Можно загружать фото.';
+    } catch(e) {
+      document.getElementById('modelStatus').textContent='❌ Ошибка загрузки модели.';
+    }
+  }
+
+  async function handleAIImage(input) {
+    if (!cocoModel) { alert('Модель не загружена'); return; }
+    const file=input.files[0];
+    if (!file) return;
+    const reader=new FileReader();
+    reader.onload=async ()=> {
+      const img=document.createElement('img');
+      img.src=reader.result;
+      await new Promise(r=>img.onload=r);
+      document.getElementById('previewImg').src=img.src;
+      document.getElementById('aiPreview').classList.remove('hidden');
+      document.getElementById('aiProgress').classList.remove('hidden');
+      document.getElementById('aiResult').classList.add('hidden');
+
+      // Анализ
+      analyzeImage(img);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyzeImage(img) {
+    document.getElementById('aiStatusText').textContent='Анализируем изображение…';
+    document.getElementById('aiProgressBar').style.width='0%';
+
+    let progress=0;
+    const interval=setInterval(()=> {
+      progress+=10;
+      if (progress>100) progress=100;
+      document.getElementById('aiProgressBar').style.width=progress+'%';
+    }, 200);
+
+    const predictions=await cocoModel.detect(img);
+    clearInterval(interval);
+    document.getElementById('aiProgressBar').style.width='100%';
+
+    let objects=predictions.map(p=>p.class).join(', ');
+    document.getElementById('aiResult').innerHTML=`
+      <h4 class="font-semibold mb-2">Обнаружено объектов:</h4>
+      <p class="text-sm">${objects}</p>
+    `;
+    document.getElementById('aiResult').classList.remove('hidden');
+    document.getElementById('aiProgress').classList.add('hidden');
+    document.getElementById('aiStatusText').textContent='Анализ завершен';
+
+    // Предложить услуги
+    suggestServicesByObjects(predictions);
+  }
+
+  function suggestServicesByObjects(objects) {
+    const classes=objects.map(o=>o.class);
+    const matched=services.filter(s=>s.aiObjects.some(a=>classes.includes(a)));
+    alert('Обнаружено: '+classes.join(', ')+'\nРекомендуемые услуги:\n'+matched.map(s=>s.name).join('\n'));
+  }
+
+  function resetAI() {
+    document.getElementById('previewImg').src='';
+    document.getElementById('aiPreview').classList.add('hidden');
+    document.getElementById('aiResult').classList.add('hidden');
+    document.getElementById('aiProgress').classList.add('hidden');
+    document.getElementById('aiStatusText').textContent='Загрузка модели распознавания...';
+  }
+
+  // ==================== Вспомогательные ====================
+  function openAdminPanel() {
+    const pass=prompt('Введите пароль администратора:');
+    if (pass!==ADMIN_PASSWORD) { showToast('Неверный пароль'); return; }
+    document.getElementById('adminModal').classList.remove('hidden');
+    populateYearSelect();
+    renderAdminCalendar();
+    renderAdminBookedSlotsList();
+  }
+
+  function closeAdminPanel() {
+    document.getElementById('adminModal').classList.add('hidden');
+  }
+
+  function populateYearSelect() {
+    const select=document.getElementById('adminYearSelect');
+    select.innerHTML='';
+    for (let y=2024; y<=2035; y++) {
+      const opt=document.createElement('option');
+      opt.value=y; opt.textContent=y;
+      if (y===adminCurrentYear) opt.selected=true;
+      select.appendChild(opt);
+    }
+  }
+
+  function changeAdminMonth(delta) {
+    adminCurrentMonth+=delta;
+    if (adminCurrentMonth>11){adminCurrentMonth=0; adminCurrentYear++;}
+    if (adminCurrentMonth<0){adminCurrentMonth=11; adminCurrentYear--;}
+    populateYearSelect();
+    adminSelectedDate=null;
+    renderAdminCalendar();
+    renderAdminBookedSlotsList();
+    renderAdminTimeSlots();
+  }
+
+  function changeAdminYear() {
+    adminCurrentYear=parseInt(document.getElementById('adminYearSelect').value);
+    adminSelectedDate=null;
+    renderAdminCalendar();
+    renderAdminBookedSlotsList();
+    renderAdminTimeSlots();
+  }
+
+  function renderAdminCalendar() {
+    const container=document.getElementById('adminCalendar');
+    if (!container) return;
+    const monthNames=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    document.getElementById('adminMonthLabel').textContent=`${monthNames[adminCurrentMonth]} ${adminCurrentYear}`;
+    document.getElementById('adminCurrentMonthLabel').textContent=`${monthNames[adminCurrentMonth]} ${adminCurrentYear}`;
+    const daysInMonth=new Date(adminCurrentYear, adminCurrentMonth+1, 0).getDate();
+    const firstDay=new Date(adminCurrentYear, adminCurrentMonth, 1).getDay();
+    let html=`<div class="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">${['Вс','Пн','Вт','Ср','Чт','Пт','Сб'].map(d=>`<div class="text-center">${d}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1">`;
+    for (let i=0;i<firstDay;i++) html+=`<div class="calendar-day empty"></div>`;
+    for (let d=1; d<=daysInMonth; d++) {
+      const dateStr=`${adminCurrentYear}-${String(adminCurrentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const bookedTimes=getBookedTimesForDate(dateStr);
+      const fullyBooked=bookedTimes.length===10;
+      html+=`<div class="${fullyBooked?'booked':''}" data-date="${dateStr}" onclick="adminSelectDate('${dateStr}')">${d}</div>`;
+    }
+    html+='</div>';
+    document.getElementById('adminCalendar').innerHTML=html;
+  }
+
+  function adminSelectDate(dateStr) {
+    adminSelectedDate=dateStr;
+    document.getElementById('adminSelectedDateLabel').textContent=dateStr;
+    document.getElementById('adminTimeSlots').classList.remove('hidden');
+    renderAdminTimeSlots();
+  }
+
+  function renderAdminTimeSlots() {
+    const grid=document.getElementById('adminTimeSlotsGrid');
+    if (!grid || !adminSelectedDate) {
+      document.getElementById('adminTimeSlots').classList.add('hidden');
+      return;
+    }
+    const slots=['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'];
+    const bookedTimes=getBookedTimesForDate(adminSelectedDate);
+    grid.innerHTML=slots.map(t => `<div class="time-slot ${bookedTimes.includes(t)?'booked':''}" onclick="toggleAdminTimeSlot('${t}')">${t}</div>`).join('');
+  }
+
+  function toggleAdminTimeSlot(time) {
+    if (!adminSelectedDate) return;
+    const index=bookedSlots.findIndex(s=>s.date===adminSelectedDate && s.time===time);
+    if (index>-1) { bookedSlots.splice(index,1); } else { bookedSlots.push({date:adminSelectedDate, time:time}); }
+    localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
+    renderAdminTimeSlots(); renderAdminCalendar(); renderAdminBookedSlotsList();
+  }
+
+  function renderAdminBookedSlotsList() {
+    const list=document.getElementById('adminBookedSlotsList');
+    if (!list) return;
+    const monthSlots=bookedSlots.filter(s=>{
+      const d=new Date(s.date);
+      return d.getFullYear()===adminCurrentYear && d.getMonth()===adminCurrentMonth;
+    });
+    if (monthSlots.length===0) { list.innerHTML='<p class="text-gray-400">Нет занятых слотов</p>'; return; }
+    list.innerHTML=monthSlots.map(s=>`
+      <div class="flex justify-between items-center bg-red-50 p-1 rounded">
+        <span>${s.date} ${s.time}</span>
+        <button onclick="removeBookedSlot('${s.date}','${s.time}')" class="text-red-500 text-xs">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function removeBookedSlot(date,time) {
+    bookedSlots=bookedSlots.filter(s=> !(s.date===date && s.time===time));
+    localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
+    renderAdminTimeSlots(); renderAdminCalendar(); renderAdminBookedSlotsList();
+  }
+
+  function clearAllBooked() {
+    if (confirm('Удалить все занятые слоты?')) {
+      bookedSlots=[];
+      localStorage.setItem('bookedSlots', JSON.stringify(bookedSlots));
+      renderAdminCalendar(); renderAdminTimeSlots(); renderAdminBookedSlotsList();
+    }
+  }
+
+  // ==================== Вспомогательные ====================
+  function selectClientDate(dateStr) {
+    const today=new Date(); today.setHours(0,0,0,0);
+    if (new Date(dateStr)<today) return;
+    if (getBookedTimesForDate(dateStr).length===10) return;
+    selectedDate=dateStr; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  function changeClientMonth(delta) {
+    clientCurrentMonth+=delta;
+    if (clientCurrentMonth>11){clientCurrentMonth=0; clientCurrentYear++; }
+    if (clientCurrentMonth<0){clientCurrentMonth=11; clientCurrentYear--; }
+    populateClientYearSelect();
+    selectedDate=null; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  function changeClientYear() {
+    clientCurrentYear=parseInt(document.getElementById('clientYearSelect').value);
+    selectedDate=null; selectedTime=null;
+    renderCalendar(); renderClientTimeSlots();
+  }
+
+  // ==================== ИИ ====================
+  async function loadModel() {
+    document.getElementById('modelStatus').textContent='Загрузка модели распознавания...';
+    try {
+      cocoModel=await cocoSsd.load();
+      document.getElementById('modelStatus').textContent='✅ Модель готова.';
+    } catch(e) {
+      document.getElementById('modelStatus').textContent='❌ Ошибка загрузки модели.';
+    }
+  }
+
+  async function handleAIImage(input) {
+    if (!cocoModel) { alert('Модель не загружена'); return; }
+    const file=input.files[0];
+    if (!file) return;
+    const reader=new FileReader();
+    reader.onload=async ()=> {
+      const img=document.createElement('img');
+      img.src=reader.result;
+      await new Promise(r=>img.onload=r);
+      document.getElementById('previewImg').src=img.src;
+      document.getElementById('aiPreview').classList.remove('hidden');
+      document.getElementById('aiProgress').classList.remove('hidden');
+      document.getElementById('aiResult').classList.add('hidden');
+      analyzeImage(img);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyzeImage(img) {
+    document.getElementById('aiStatusText').textContent='Анализируем изображение…';
+    document.getElementById('aiProgressBar').style.width='0%';
+
+    let progress=0;
+    const interval=setInterval(()=> {
+      progress+=10;
+      if (progress>100) progress=100;
+      document.getElementById('aiProgressBar').style.width=progress+'%';
+    }, 200);
+
+    const predictions=await cocoModel.detect(img);
+    clearInterval(interval);
+    document.getElementById('aiProgressBar').style.width='100%';
+
+    let classes=predictions.map(p=>p.class).join(', ');
+    document.getElementById('aiResult').innerHTML=`
+      <h4 class="font-semibold mb-2">Обнаружено объектов:</h4>
+      <p class="text-sm">${classes}</p>
+    `;
+    document.getElementById('aiResult').classList.remove('hidden');
+    document.getElementById('aiProgress').classList.add('hidden');
+    document.getElementById('aiStatusText').textContent='Анализ завершен';
+
+    suggestServicesByObjects(predictions);
+  }
+
+  function suggestServicesByObjects(objects) {
+    const classes=objects.map(o=>o.class);
+    const matched=services.filter(s=>s.aiObjects.some(a=>classes.includes(a)));
+    alert('Обнаружено: '+classes.join(', ')+'\nРекомендуемые услуги:\n'+matched.map(s=>s.name).join('\n'));
+  }
+
+  function resetAI() {
+    document.getElementById('previewImg').src='';
+    document.getElementById('aiPreview').classList.add('hidden');
+    document.getElementById('aiResult').classList.add('hidden');
+    document.getElementById('aiProgress').classList.add('hidden');
+    document.getElementById('aiStatusText').textContent='Загрузка модели распознавания...';
+  }
+
+</script>
 </body>
 </html>
